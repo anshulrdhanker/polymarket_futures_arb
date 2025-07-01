@@ -1,1 +1,1 @@
-{"name": "email-agent", "private": true, "workspaces": ["frontend", "backend", "shared"]}
+{"name":"email-agent","private":true,"workspaces":["frontend","backend","shared"],"dependencies":{"google-auth-library":"^10.1.0","googleapis":"^150.0.1"}}
