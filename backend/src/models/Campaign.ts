@@ -1,4 +1,5 @@
 import { supabase } from '../config/database';
+import { CampaignStatus } from '../services/queueTypes';
 
 export interface CreateCampaignData {
   user_id: string;
@@ -34,7 +35,7 @@ export interface CampaignProfile {
   salary_range: string | null;
   remote_ok: boolean;
   target_emails: number;
-  status: string;
+  status: CampaignStatus;
   pdl_search_params: any;
   total_found: number;
   total_sent: number;
@@ -80,22 +81,22 @@ export class Campaign {
           remote_ok: campaignData.remote_ok || false,
           target_emails: campaignData.target_emails || 50,
           status: 'draft',
-          pdl_search_params: null,
+          pdl_search_params: {
+            // Store extra data in this JSON field
+            recruiter_name: campaignData.recruiter_name,
+            recruiter_company: campaignData.recruiter_company,
+            recruiter_title: campaignData.recruiter_title,
+            recruiter_mission: campaignData.recruiter_mission,
+            prospect_industry: campaignData.prospect_industry,
+            specific_skills: campaignData.specific_skills,
+            experience_level: campaignData.experience_level,
+            company_size: campaignData.company_size,
+            additional_variables: campaignData.additional_variables,
+          },
           total_found: 0,
           total_sent: 0,
           created_at: new Date().toISOString(),
           completed_at: null,
-          // Variable storage
-          recruiter_name: campaignData.recruiter_name,
-          recruiter_company: campaignData.recruiter_company,
-          recruiter_title: campaignData.recruiter_title,
-          recruiter_mission: campaignData.recruiter_mission,
-          prospect_industry: campaignData.prospect_industry,
-          is_remote: campaignData.is_remote,
-          specific_skills: campaignData.specific_skills || null,
-          experience_level: campaignData.experience_level || null,
-          company_size: campaignData.company_size || null,
-          additional_variables: campaignData.additional_variables || null,
         }])
         .select()
         .single();
@@ -161,7 +162,7 @@ export class Campaign {
   /**
    * Update campaign status
    */
-  static async updateStatus(campaignId: string, status: string): Promise<boolean> {
+  static async updateStatus(campaignId: string, status: CampaignStatus): Promise<boolean> {
     try {
       const updateData: any = {
         status,
@@ -495,24 +496,25 @@ export class Campaign {
   }
 
   /**
-   * Get campaigns that need processing (draft status)
+   * Get campaigns that need processing (draft or processing status)
    */
-  static async getPendingCampaigns(): Promise<CampaignProfile[]> {
+  static async getPendingCampaigns(limit: number = 50): Promise<CampaignProfile[]> {
     try {
       const { data, error } = await supabase
         .from('campaigns')
         .select('*')
-        .eq('status', 'draft')
-        .order('created_at', { ascending: true });
+        .in('status', ['draft', 'processing'])
+        .order('created_at', { ascending: true })
+        .limit(limit);
 
       if (error) {
-        console.error('Error fetching pending campaigns:', error);
+        console.error('Error getting pending campaigns:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('Error in Campaign.getPendingCampaigns:', error);
+      console.error('Error in getPendingCampaigns:', error);
       return [];
     }
   }
@@ -520,22 +522,23 @@ export class Campaign {
   /**
    * Get active campaigns for email sending
    */
-  static async getActiveCampaigns(): Promise<CampaignProfile[]> {
+  static async getActiveCampaigns(limit: number = 50): Promise<CampaignProfile[]> {
     try {
       const { data, error } = await supabase
         .from('campaigns')
         .select('*')
-        .eq('status', 'active')
-        .order('created_at', { ascending: true });
+        .in('status', ['sending', 'processing'])
+        .order('created_at', { ascending: true })
+        .limit(limit);
 
       if (error) {
-        console.error('Error fetching active campaigns:', error);
+        console.error('Error getting active campaigns:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('Error in Campaign.getActiveCampaigns:', error);
+      console.error('Error in getActiveCampaigns:', error);
       return [];
     }
   }
@@ -567,12 +570,12 @@ export class Campaign {
    */
   static async togglePause(campaignId: string): Promise<boolean> {
     try {
-      // First get current status
+      // Get current status
       const campaign = await this.findById(campaignId);
       if (!campaign) return false;
 
-      const newStatus = campaign.status === 'paused' ? 'active' : 'paused';
-      return await this.updateStatus(campaignId, newStatus);
+      const newStatus: CampaignStatus = campaign.status === 'paused' ? 'sending' : 'paused';
+      return this.updateStatus(campaignId, newStatus);
     } catch (error) {
       console.error('Error in Campaign.togglePause:', error);
       return false;
@@ -597,13 +600,13 @@ export class Campaign {
   /**
    * Helper to get empty stats object
    */
-  private static getEmptyStats(): CampaignStats {
+  static getEmptyStats(): CampaignStats {
     return {
       total_campaigns: 0,
       active_campaigns: 0,
       total_candidates_found: 0,
       total_emails_sent: 0,
-      average_response_rate: 0,
+      average_response_rate: 0
     };
   }
 }

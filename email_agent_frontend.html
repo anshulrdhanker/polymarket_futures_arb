@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>sement. - Email Agent</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Headline Block Styles */
+    .headline-block {
+      margin: 0 auto;
+      text-align: center;
+      max-width: 100%;
+    }
+
+    .headline-block h2 {
+      font-family: 'Satoshi', sans-serif;
+      font-weight: 600;
+      font-size: 2rem;
+      margin: 0 0 40px 0;
+      color: #000;
+    }
+
+    .icon-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 15px;
+    }
+
+    /* Base Styles */
+    :root {
+      --color-text: #111;
+      --color-text-secondary: #444;
+      --color-border: #e5e5e5;
+      --color-bg: #fafafa;
+      --color-bg-alt: #f0f2f5;
+      --color-card: #fff;
+      --color-primary: #000;
+      --border-radius: 6px;
+      --spacing-unit: 1rem;
+      --transition: all 0.3s ease;
+      --header-height: 80px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    .card {
+      border: 1px solid var(--color-border);
+      background-color: var(--color-card);
+      border-radius: var(--border-radius);
+      padding: 1.5rem;
+      flex: 1;
+      min-width: 280px;
+      transition: var(--transition);
+    }
+
+    .card.active {
+      border-color: var(--color-primary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    /* Scroll Progress Bar */
+    .scroll-progress {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 0%;
+      height: 12px;
+      background-color: #000;
+      z-index: 1000;
+      transition: width 0.1s ease-out;
+      will-change: width;
+      opacity: 1 !important;
+    }
+    
+    @keyframes progress-pulse {
+      0% { opacity: 0.9; }
+      50% { opacity: 1; }
+      100% { opacity: 0.9; }
+    }
+    
+    .scroll-progress.animate {
+      animation: progress-pulse 2s ease-in-out infinite;
+    }
+    
+    /* Bottom Gradient Overlay */
+    .scroll-gradient {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 100px;
+      background: linear-gradient(to top, rgba(250, 250, 250, 0.9), rgba(250, 250, 250, 0));
+      pointer-events: none;
+      z-index: 100;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      line-height: 1.6;
+      color: #1a1a1a;
+      background-color: #f5f5f5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Header Styles */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 5%;
+      background: white;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    
+    .nav-link {
+      margin-left: 2rem;
+      text-decoration: none;
+      color: #333;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: color 0.2s ease;
+    }
+    
+    .nav-link:hover {
+      color: #000;
+    }
+    
+    .nav-login {
+      margin-left: 2rem;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid #000;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+    
+    .nav-login:hover {
+      background-color: rgba(0, 0, 0, 0.02);
+    }
+    
+    /* Hero Section */
+    .hero {
+      padding: 6rem 5% 4rem;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: calc(100vh - 80px);
+    }
+    
+    .hero-content {
+      max-width: 700px;
+      text-align: center;
+      margin: 0 auto;
+    }
+    
+    .hero-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+    }
+    
+    .hero-title {
+      font-size: 2.75rem;
+      font-weight: 500;
+      margin: 0 0 1.5rem;
+      line-height: 1.1;
+      letter-spacing: -0.05em;
+      padding-left: 10px;
+    }
+    
+    .hero-subtitle {
+      font-size: 1.25rem;
+      color: #666;
+      line-height: 1.6;
+      max-width: 600px;
+      margin: 0 auto 3rem;
+      padding-right: 10px;
+    }
+    
+    .scroll-indicator {
+      margin-top: 4.5rem;
+      animation: bounce 2s infinite;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      visibility: hidden;
+    }
+    
+    .scroll-indicator.visible {
+      opacity: 0.6;
+      visibility: visible;
+    }
+    
+    .scroll-indicator svg {
+      width: 24px;
+      height: 24px;
+      color: #666;
+    }
+    
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(-10px);
+      }
+      60% {
+        transform: translateY(-5px);
+      }
+    }
+    
+    /* Form Styles */
+    .main-container {
+      padding: 2rem 1rem 8.2rem 1rem;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 8px;
+      letter-spacing: 0.2px;
+    }
+    
+    input[type="text"],
+    input[type="email"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 12px 0;
+      border: none;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 15px;
+      background: transparent;
+      transition: all 0.2s ease;
+    }
+    
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    textarea:focus,
+    select:focus {
+      border-bottom-color: #000;
+      outline: none;
+    }
+    
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    
+    /* Button Styles */
+    button[type="submit"],
+    .btn {
+      background: #000;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+      margin-top: 8px;
+    }
+    
+    button[type="submit"]:hover,
+    .btn:hover {
+      opacity: 0.9;
+    }
+    
+    /* Checkbox Styles */
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 1rem;
+    }
+    
+    .checkbox-group input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+    }
+    
+    .checkbox-group label {
+      font-size: 14px;
+      color: #666;
+      margin: 0;
+      font-weight: normal;
+    }
+    
+    /* Footer Styles */
+    .cta-container {
+      max-width: 600px;
+      margin: 3rem auto 5rem;
+      padding: 0 5%;
+      text-align: center;
+    }
+    
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .btn-primary {
+      background: #000;
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      color: #000;
+      border: 1px solid #e5e5e5;
+    }
+    
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #666;
+    }
+    
+    .footer-links a {
+      color: inherit;
+      text-decoration: none;
+    }
+    
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 style="font-family: 'Satoshi', sans-serif; font-weight: 600; letter-spacing: -0.5px; display: flex; align-items: baseline;">
+      sement.<span style="display: inline-block; width: 1px; margin: 0 18px; background: #999; height: 0.8em; position: relative; top: 0.1em; opacity: 0.5;"></span>
+      <span style="font-weight: 400; font-size: 0.9em; opacity: 0.9;">reach</span>
+    </h1>
+    <nav>
+      <a href="#" class="nav-link">Use Cases</a>
+      <a href="pricing.html" class="nav-link">Pricing</a>
+      <a href="#" class="nav-link">Support</a>
+      <a href="#" class="nav-link nav-login">Log In</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+          <polyline points="22,6 12,13 2,6"></polyline>
+        </svg>
+      </div>
+      <h2 class="hero-title">Your Outreach Machine</h2>
+      <p class="hero-subtitle">Describe who you want to reach. We'll find them, write the email, and send it.</p>
+      <div class="scroll-indicator">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 13l5 5 5-5M7 6l5 5 5-5"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <main>
+    <!-- Section 1: Recruiter Information -->
+    <section id="recruiter-info" class="main-container">
+      <div style="background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); max-width: 500px; margin: 0 auto; width: 100%; border: 1px solid #eaeaea; overflow: hidden;">
+        <div style="padding: 24px 32px 32px;">
+          <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 12px; font-weight: 600; color: #666;">2</div>
+            <div style="font-size: 13px; color: #666; font-weight: 500;">Step 2 of 3</div>
+          </div>
+          
+          <h2 style="font-size: 20px; font-weight: 600; margin: 0 0 24px 0; color: #111;">Tell us about yourself</h2>
+          
+          <form id="recruiterForm" style="display: flex; flex-direction: column; gap: 24px;">
+            <div class="form-group">
+              <label for="recruiterName">Recruiter Name *</label>
+              <input 
+                type="text" 
+                id="recruiterName" 
+                name="recruiterName" 
+                required 
+                placeholder="e.g., Jane Doe"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="recruiterTitle">Recruiter Title *</label>
+              <input 
+                type="text" 
+                id="recruiterTitle" 
+                name="recruiterTitle"
+                required
+                placeholder="e.g., Head of Talent"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="companyName">Company Name *</label>
+              <input 
+                type="text" 
+                id="companyName" 
+                name="companyName"
+                required
+                placeholder="e.g., Acme Corp"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="companyProblem">What problem does this company solve? *</label>
+              <textarea 
+                id="companyProblem" 
+                name="companyProblem"
+                required
+                placeholder="e.g., Simplifies enterprise payments"
+                rows="3"
+              ></textarea>
+            </div>
+            
+            <button type="submit">Continue</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Job Details -->
+    <section id="job-details" class="main-container" style="display: none;">
+      <div style="background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); max-width: 500px; margin: 0 auto; width: 100%; border: 1px solid #eaeaea; overflow: hidden;">
+        <div style="padding: 24px 32px 32px;">
+          <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background-color: #f0f0f0; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 12px; font-weight: 600; color: #666;">3</div>
+            <div style="font-size: 13px; color: #666; font-weight: 500;">Step 3 of 3</div>
+          </div>
+          
+          <h2 style="font-size: 20px; font-weight: 600; margin: 0 0 24px 0; color: #111;">Tell us about the role</h2>
+          
+          <form id="jobForm" style="display: flex; flex-direction: column; gap: 24px;">
+            <div class="form-group">
+              <label for="roleTitle">Role Title *</label>
+              <input 
+                type="text" 
+                id="roleTitle" 
+                name="roleTitle"
+                required
+                placeholder="e.g., Senior Frontend Developer"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="skills">Must-have Skills *</label>
+              <input 
+                type="text" 
+                id="skills" 
+                name="skills"
+                required
+                placeholder="e.g., React, TypeScript, Redux"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="experience">Experience Range *</label>
+              <input 
+                type="text" 
+                id="experience" 
+                name="experience"
+                required
+                placeholder="e.g., 3-5 years"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="seniority">Seniority Level *</label>
+              <select id="seniority" name="seniority" required>
+                <option value="" disabled selected>Select seniority level</option>
+                <option value="Entry Level">Entry Level</option>
+                <option value="Mid Level">Mid Level</option>
+                <option value="Senior">Senior</option>
+                <option value="Lead">Lead</option>
+                <option value="Principal">Principal</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="companySize">Current Company Size *</label>
+              <select id="companySize" name="companySize" required>
+                <option value="" disabled selected>Select company size</option>
+                <option value="1-10">1-10 employees</option>
+                <option value="11-50">11-50 employees</option>
+                <option value="51-200">51-200 employees</option>
+                <option value="201-500">201-500 employees</option>
+                <option value="501-1000">501-1000 employees</option>
+                <option value="1001-5000">1001-5000 employees</option>
+                <option value="5000+">5000+ employees</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="industry">Industry</label>
+              <input 
+                type="text" 
+                id="industry" 
+                name="industry"
+                placeholder="e.g., Fintech, SaaS"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="location">Location *</label>
+              <input 
+                type="text" 
+                id="location" 
+                name="location"
+                required
+                placeholder="e.g., New York, NY"
+              >
+            </div>
+        
+            <div class="checkbox-group">
+              <input type="checkbox" id="isRemote" name="isRemote">
+              <label for="isRemote">This is a remote position</label>
+            </div>
+            
+            <button type="submit">Find Candidates</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+  
+  <!-- Scroll Progress Bar -->
+  <div class="scroll-progress"></div>
+  
+  <!-- Bottom Gradient Overlay -->
+  <div class="scroll-gradient"></div>
+  
+  <script>
+    // Handle form submission and navigation
+    document.addEventListener('DOMContentLoaded', function() {
+      const recruiterForm = document.getElementById('recruiterForm');
+      const jobDetailsSection = document.getElementById('job-details');
+      const scrollProgress = document.querySelector('.scroll-progress');
+      const scrollGradient = document.querySelector('.scroll-gradient');
+      let isScrolling = false;
+      
+      // Show scroll indicator after hero section
+      window.addEventListener('scroll', function() {
+        // Update scroll progress
+        const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+        const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+        const scrolled = (winScroll / height) * 100;
+        scrollProgress.style.width = scrolled + '%';
+        
+        // Show/hide scroll gradient
+        const scrollPosition = window.innerHeight + window.scrollY;
+        const bodyHeight = document.body.offsetHeight;
+        
+        if (scrollPosition >= bodyHeight - 100) {
+          scrollGradient.style.opacity = '0';
+        } else {
+          scrollGradient.style.opacity = '1';
+        }
+      });
+      
+      // Handle recruiter form submission
+      if (recruiterForm) {
+        recruiterForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          // Basic form validation
+          const requiredFields = recruiterForm.querySelectorAll('[required]');
+          let isValid = true;
+          
+          requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+              isValid = false;
+              field.style.borderBottomColor = '#e53e3e';
+              field.addEventListener('input', function() {
+                if (this.value.trim()) {
+                  this.style.borderBottomColor = '#f0f0f0';
+                }
+              }, { once: true });
+            }
+          });
+          
+          if (isValid) {
+            // Store recruiter data
+            const formData = new FormData(recruiterForm);
+            const recruiterData = Object.fromEntries(formData.entries());
+            console.log('Recruiter data:', recruiterData);
+            
+            // Show job details section
+            if (jobDetailsSection) {
+              jobDetailsSection.style.display = 'block';
+              
+              // Smooth scroll to job details
+              jobDetailsSection.scrollIntoView({ behavior: 'smooth' });
+              
+              // Update form navigation
+              const stepIndicator = jobDetailsSection.querySelector('div[style*="display: flex"]');
+              if (stepIndicator) {
+                stepIndicator.querySelector('div:first-child').textContent = '3';
+                stepIndicator.querySelector('div:last-child').textContent = 'Step 3 of 3';
+              }
+            }
+          }
+        });
+      }
+      
+      // Handle job form submission
+      const jobForm = document.getElementById('jobForm');
+      if (jobForm) {
+        jobForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          // Basic form validation
+          const requiredFields = jobForm.querySelectorAll('[required]');
+          let isValid = true;
+          
+          requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+              isValid = false;
+              field.style.borderBottomColor = '#e53e3e';
+              field.addEventListener('input', function() {
+                if (this.value.trim()) {
+                  this.style.borderBottomColor = '#f0f0f0';
+                }
+              }, { once: true });
+            }
+          });
+          
+          if (isValid) {
+            // Collect form data
+            const formData = new FormData(jobForm);
+            const jobData = Object.fromEntries(formData.entries());
+            console.log('Job data:', jobData);
+            
+            // Here you would typically send the data to your backend
+            // For now, we'll just show a success message
+            alert('Form submitted successfully!');
+          }
+        });
+      }
+      
+      // Show scroll indicator after a short delay
+      setTimeout(() => {
+        const scrollIndicator = document.querySelector('.scroll-indicator');
+        if (scrollIndicator) {
+          scrollIndicator.classList.add('visible');
+        }
+      }, 2000);
+    });
+  </script>
+</body>
+</html>

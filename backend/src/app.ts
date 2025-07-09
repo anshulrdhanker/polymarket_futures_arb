@@ -5,9 +5,24 @@ import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import { campaignWorker } from './jobs/campaignProcessor';
+import { emailWorker } from './jobs/emailSender';
+
+// Worker initialization
+console.log('🚀 Background workers initialized');
+console.log('📊 Campaign worker ready - processing campaigns');
+console.log('📧 Email worker ready - sending emails');
 
 // Load environment variables
 dotenv.config();
+
+// DEBUG: Check environment loading
+console.log('=== ENV DEBUG ===');
+console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
+console.log('JWT_SECRET value:', process.env.JWT_SECRET);
+console.log('All JWT env vars:', Object.keys(process.env).filter(k => k.includes('JWT')));
+console.log('================');
 
 const app = express();
 
@@ -55,6 +70,12 @@ const limiter = rateLimit({
 
 app.use('/api/', limiter);
 
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`🔍 ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -75,13 +96,36 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Test authentication endpoint
+app.post('/api/test/auth', (req, res): void => {
+  const testUser = {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    email: 'test@example.com',
+    user_full_name: 'Test User'
+  };
+  
+  if (!process.env.JWT_SECRET) {
+    res.status(500).json({ error: 'JWT_SECRET not configured' });
+    return;
+  }
+  
+  const token = jwt.sign(
+    { userId: testUser.id, ...testUser }, 
+    process.env.JWT_SECRET, 
+    { expiresIn: '24h' }
+  );
+  
+  res.json({ token, user: testUser });
+});
+
 // API routes will be mounted here
 import authRoutes from './routes/auth';
+import campaignRoutes from './routes/campaigns';
 
 // Mount routes
 app.use('/api/auth', authRoutes);
+app.use('/api/campaigns', campaignRoutes);
 // TODO: Mount other routes as they're created
-// app.use('/api/campaigns', campaignRoutes);
 // app.use('/api/candidates', candidateRoutes);
 // app.use('/api/email-templates', emailTemplateRoutes);
 // app.use('/api/user', userRoutes);

@@ -7,7 +7,7 @@ import {
   revokeGmailTokens 
 } from '../config/gmail';
 
-// Import the User model using the local symlink
+// Import the User model
 import { User } from '../models/User';
 
 const router = Router();
