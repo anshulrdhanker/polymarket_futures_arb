@@ -7,6 +7,12 @@ export interface CreateUserData {
   user_full_name?: string;
   default_recruiter_title?: string;
   default_company_mission?: string;
+  campaigns_purchased?: number;
+  campaigns_used?: number;
+  campaigns_remaining?: number;
+  is_enterprise?: boolean;
+  stripe_customer_id?: string;
+  last_purchase_date?: string;
 }
 
 export interface GmailTokens {
@@ -36,6 +42,12 @@ export interface UserProfile {
   // Email rate limiting
   emails_sent_today: number;
   last_email_date: string | null;
+  // Subscription management
+  campaigns_purchased: number;
+  campaigns_used: number;
+  campaigns_remaining: number;
+  is_enterprise: boolean;
+  last_purchase_date: string | null;
 }
 
 // Campaign limits by subscription tier
@@ -48,6 +60,14 @@ const CAMPAIGN_LIMITS: Record<SubscriptionTier, number> = {
   enterprise: 500
 };
 
+// Campaign packages that users can purchase
+const CAMPAIGN_PACKAGES = {
+  small: { campaigns: 10, price: 99 },
+  medium: { campaigns: 25, price: 199 },
+  large: { campaigns: 100, price: 699 },
+  unlimited: { campaigns: -1, price: 999 } // -1 represents unlimited
+};
+
 export class User {
 
   // Instance properties matching UserProfile
@@ -58,6 +78,12 @@ export class User {
   campaigns_used_this_month: number;
   billing_cycle_start: string;
   user_full_name: string | null;
+  // Subscription management
+  campaigns_purchased: number;
+  campaigns_used: number;
+  campaigns_remaining: number;
+  is_enterprise: boolean;
+  last_purchase_date: string | null;
   
   constructor(profile: UserProfile) {
     this.id = profile.id;
@@ -67,6 +93,12 @@ export class User {
     this.campaigns_used_this_month = profile.campaigns_used_this_month;
     this.billing_cycle_start = profile.billing_cycle_start;
     this.user_full_name = profile.user_full_name;
+    // Initialize subscription fields
+    this.campaigns_purchased = profile.campaigns_purchased || 0;
+    this.campaigns_used = profile.campaigns_used || 0;
+    this.campaigns_remaining = profile.campaigns_remaining || 0;
+    this.is_enterprise = profile.is_enterprise || false;
+    this.last_purchase_date = profile.last_purchase_date || null;
   }
 
   /**
@@ -127,8 +159,152 @@ export class User {
   /**
    * Increment campaign usage counter for the current user
    */
+  /**
+   * Purchase additional campaigns
+   * @param packageType The package type to purchase (small, medium, large, unlimited)
+   */
+  async purchaseCampaigns(packageType: keyof typeof CAMPAIGN_PACKAGES): Promise<{
+    success: boolean;
+    message: string;
+    campaignsAdded: number;
+    newBalance: number;
+  }> {
+    try {
+      const packageInfo = CAMPAIGN_PACKAGES[packageType];
+      if (!packageInfo) {
+        throw new Error('Invalid campaign package');
+      }
+
+      // For unlimited package, set is_enterprise to true
+      if (packageType === 'unlimited') {
+        await this.updateEnterpriseStatus(true);
+        return {
+          success: true,
+          message: 'Enterprise subscription activated with unlimited campaigns',
+          campaignsAdded: -1, // -1 represents unlimited
+          newBalance: -1
+        };
+      }
+
+      const campaignsToAdd = packageInfo.campaigns;
+      const newPurchased = this.campaigns_purchased + campaignsToAdd;
+      const newRemaining = this.campaigns_remaining + campaignsToAdd;
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          campaigns_purchased: newPurchased,
+          campaigns_remaining: newRemaining,
+          last_purchase_date: new Date().toISOString()
+        })
+        .eq('id', this.id);
+
+      if (error) throw error;
+
+      // Update instance properties
+      this.campaigns_purchased = newPurchased;
+      this.campaigns_remaining = newRemaining;
+      this.last_purchase_date = new Date().toISOString();
+
+      return {
+        success: true,
+        message: `Successfully purchased ${campaignsToAdd} campaigns`,
+        campaignsAdded: campaignsToAdd,
+        newBalance: newRemaining
+      };
+    } catch (error) {
+      console.error('Error purchasing campaigns:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to purchase campaigns',
+        campaignsAdded: 0,
+        newBalance: this.campaigns_remaining
+      };
+    }
+  }
+
+  /**
+   * Update enterprise status
+   */
+  private async updateEnterpriseStatus(isEnterprise: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_enterprise: isEnterprise,
+        subscription_tier: isEnterprise ? 'enterprise' : 'free',
+        last_purchase_date: new Date().toISOString()
+      })
+      .eq('id', this.id);
+
+    if (error) throw error;
+
+    this.is_enterprise = isEnterprise;
+    this.subscription_tier = isEnterprise ? 'enterprise' : 'free';
+  }
+
+  /**
+   * Check if user can create a new campaign based on their purchased campaigns
+   */
+  canCreateCampaign(): { allowed: boolean; reason?: string } {
+    // Enterprise users have unlimited campaigns
+    if (this.is_enterprise) {
+      return { allowed: true };
+    }
+
+    // Check if user has remaining campaigns
+    if (this.campaigns_remaining <= 0) {
+      return {
+        allowed: false,
+        reason: 'No remaining campaigns. Please purchase more.'
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Update campaign usage
+   * @param count Number of campaigns to use (default: 1)
+   */
+  async useCampaigns(count: number = 1): Promise<void> {
+    if (this.is_enterprise) {
+      return; // No need to track for enterprise users
+    }
+
+    if (this.campaigns_remaining < count) {
+      throw new Error('Not enough remaining campaigns');
+    }
+
+    const newUsed = this.campaigns_used + count;
+    const newRemaining = this.campaigns_remaining - count;
+
+    const { error } = await supabase
+      .from('users')
+      .update({
+        campaigns_used: newUsed,
+        campaigns_remaining: newRemaining
+      })
+      .eq('id', this.id);
+
+    if (error) throw error;
+
+    // Update instance properties
+    this.campaigns_used = newUsed;
+    this.campaigns_remaining = newRemaining;
+  }
+
   async incrementCampaignUsage(): Promise<void> {
     try {
+      // Check if we can use a campaign
+      const { allowed, reason } = this.canCreateCampaign();
+      if (!allowed) {
+        throw new Error(reason || 'Cannot increment campaign usage');
+      }
+
+      // Use a campaign
+      await this.useCampaigns(1);
+
+      // Update the monthly usage counter
       const { error } = await supabase.rpc('increment', {
         row_id: this.id,
         column_name: 'campaigns_used_this_month',
@@ -598,6 +774,82 @@ export class User {
     } catch (error) {
       console.error('Error in User.disconnectGmail:', error);
       return false;
+    }
+  }
+
+  static async addCampaigns(userId: string, count: number): Promise<void> {
+    try {
+      // First get current values
+      const { data: userData, error: fetchError } = await supabase
+        .from('users')
+        .select('campaigns_purchased, campaigns_remaining')
+        .eq('id', userId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!userData) throw new Error('User not found');
+
+      // Then update with new values
+      const { error } = await supabase
+        .from('users')
+        .update({
+          campaigns_purchased: (userData.campaigns_purchased || 0) + count,
+          campaigns_remaining: (userData.campaigns_remaining || 0) + count,
+          last_purchase_date: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Failed to add campaigns:', error);
+      throw new Error('Failed to add campaigns');
+    }
+  }
+
+  static async useCampaign(userId: string): Promise<void> {
+    try {
+      // First get current values
+      const { data: userData, error: fetchError } = await supabase
+        .from('users')
+        .select('campaigns_used, campaigns_remaining')
+        .eq('id', userId)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!userData) throw new Error('User not found');
+
+      // Then update with new values
+      const { error } = await supabase
+        .from('users')
+        .update({
+          campaigns_used: (userData.campaigns_used || 0) + 1,
+          campaigns_remaining: (userData.campaigns_remaining || 0) - 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Failed to use campaign:', error);
+      throw new Error('Failed to use campaign');
+    }
+  }
+
+  static async updateStripeCustomerId(userId: string, customerId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          stripe_customer_id: customerId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Failed to update Stripe customer ID:', error);
+      throw new Error('Failed to update Stripe customer ID');
     }
   }
 }

@@ -1,10 +1,11 @@
 import { Queue, QueueEvents } from 'bullmq';
+import { REDIS_CONFIG } from './config';
 
 // Redis connection configuration
 const redisConfig = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDIS_PASSWORD,
+  host: REDIS_CONFIG.HOST,
+  port: REDIS_CONFIG.PORT,
+  password: REDIS_CONFIG.PASSWORD,
   maxRetriesPerRequest: 3,
   retryDelayOnFailure: 1000,
   connectTimeout: 60000,

@@ -4,6 +4,7 @@ import { Campaign, CampaignProfile } from '../models/Campaign';
 import { User, UserProfile } from '../models/User';
 import { QueueService } from '../services/queueService';
 import { CreateCampaignData } from '../services/queueTypes';
+import { SubscriptionService } from '../services/subscriptionService';
 
 class CampaignController {
   /**
@@ -40,17 +41,16 @@ class CampaignController {
         return;
       }
 
-      const user = new User(userProfile);
-      const limitCheck = await user.checkCampaignLimits();
+      const subscriptionCheck = await SubscriptionService.checkCampaignLimits(userId);
       
-      if (!limitCheck.allowed) {
+      if (!subscriptionCheck.canCreate) {
         res.status(403).json({
           error: 'CAMPAIGN_LIMIT_REACHED',
-          message: 'You have reached your campaign limit for this billing period',
+          message: 'You have no remaining campaign credits',
           details: {
-            current: limitCheck.currentUsage,
-            limit: limitCheck.limit,
-            resetDate: user.getNextBillingDate()
+            remaining: subscriptionCheck.remainingCampaigns,
+            needsToPurchase: subscriptionCheck.needsToPurchase,
+            isEnterprise: subscriptionCheck.isEnterprise
           }
         });
         return;
@@ -92,6 +92,13 @@ class CampaignController {
       try {
         campaign = await Campaign.create(campaignData);
         console.log('✅ Campaign created successfully:', campaign);
+        
+        // Deduct campaign credit after successful creation
+        const campaignUsed = await SubscriptionService.useCampaign(userId);
+        if (!campaignUsed) {
+          console.error('Failed to deduct campaign credit');
+        }
+        
         if (!campaign) {
           throw new Error('Campaign.create returned null/undefined');
         }
@@ -111,9 +118,6 @@ class CampaignController {
           userId,
           conversationData
         );
-        
-        // 7. Update user's campaign usage
-        await user.incrementCampaignUsage();
         
       } catch (queueError) {
         console.error('Queue processing failed:', queueError);

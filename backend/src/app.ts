@@ -121,10 +121,14 @@ app.post('/api/test/auth', (req, res): void => {
 // API routes will be mounted here
 import authRoutes from './routes/auth';
 import campaignRoutes from './routes/campaigns';
+import webhookRoutes from './routes/webhooks';
+import subscriptionRoutes from './routes/subscription';
 
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/campaigns', campaignRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/subscription', subscriptionRoutes);
 // TODO: Mount other routes as they're created
 // app.use('/api/candidates', candidateRoutes);
 // app.use('/api/email-templates', emailTemplateRoutes);
