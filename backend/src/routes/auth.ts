@@ -9,6 +9,7 @@ import {
 
 // Import the User model
 import { User } from '../models/User';
+import { TokenManager } from '../services/tokenManager';
 
 const router = Router();
 
@@ -117,11 +118,10 @@ router.get('/callback', async (req: Request, res: Response) => {
       });
     }
 
-    // Store tokens in database
-    const tokensStored = await User.updateGmailTokens(user.id, {
+    // Store tokens in database using TokenManager
+    const tokensStored = await TokenManager.saveGmailTokens(user.id, {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
-      scope: tokens.scope || '',
       token_type: tokens.token_type || 'Bearer',
       expiry_date: tokens.expiry_date || Date.now() + 3600000, // 1 hour default
     });
@@ -183,11 +183,10 @@ router.post('/refresh', async (req: RefreshTokenRequest, res: Response) => {
       });
     }
 
-    // Update tokens in database
-    const tokensUpdated = await User.updateGmailTokens(userId, {
+    // Update tokens in database using TokenManager
+    const tokensUpdated = await TokenManager.saveGmailTokens(userId, {
       access_token: newTokens.access_token,
       refresh_token: newTokens.refresh_token || user.gmail_refresh_token,
-      scope: newTokens.scope || '',
       token_type: newTokens.token_type || 'Bearer',
       expiry_date: newTokens.expiry_date || Date.now() + 3600000,
     });
@@ -244,8 +243,8 @@ router.delete('/logout', async (req: LogoutRequest, res: Response) => {
       }
     }
 
-    // Remove tokens from database
-    const tokensRemoved = await User.disconnectGmail(userId);
+    // Remove tokens from database using TokenManager
+    const tokensRemoved = await TokenManager.removeGmailTokens(userId);
 
     if (!tokensRemoved) {
       return res.status(500).json({
@@ -287,7 +286,7 @@ router.get('/status', async (req: StatusRequest, res: Response) => {
       });
     }
 
-    const isGmailConnected = !!(user.gmail_token && user.gmail_refresh_token);
+    const isGmailConnected = await TokenManager.hasGmailConnected(userId as string);
 
     res.json({
       gmail_connected: isGmailConnected,

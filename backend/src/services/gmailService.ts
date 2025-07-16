@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
+import { TokenManager } from './tokenManager';
 
 // Types for Gmail integration
 export interface GmailTokens {
@@ -84,26 +85,34 @@ export class GmailService {
   /**
    * Send recruiting email via Gmail API
    */
+  /**
+   * Send recruiting email via Gmail API (using userId instead of tokens)
+   */
   static async sendRecruitingEmail(
-    userTokens: GmailTokens,
+    userId: string,  // ← Changed from userTokens parameter
     candidate: Candidate,
     subject: string,
     body: string,
     senderEmail?: string
   ): Promise<EmailResult> {
     try {
+      // Get valid tokens from database
+      const userTokens = await TokenManager.getValidTokens(userId);
+      if (!userTokens) {
+        return {
+          success: false,
+          error: 'No valid Gmail tokens found. Please reconnect your Gmail account.'
+        };
+      }
+
+      // Rest of your existing code stays the same...
+      // Just replace the userTokens parameter usage with the userTokens variable we just got
+      
       // Validate inputs
       if (!candidate.email) {
         return {
           success: false,
           error: 'Candidate email is required'
-        };
-      }
-
-      if (!userTokens.access_token || !userTokens.refresh_token) {
-        return {
-          success: false,
-          error: 'Valid Gmail tokens are required'
         };
       }
 
@@ -184,16 +193,16 @@ export class GmailService {
   }
 
   /**
-   * Send multiple emails with rate limiting
+   * Send multiple emails with rate limiting (using userId)
    */
   static async sendBulkRecruitingEmails(
-    userTokens: GmailTokens,
+    userId: string,  // ← Changed from userTokens parameter
     emailJobs: Array<{
       candidate: Candidate;
       subject: string;
       body: string;
     }>,
-    delayBetweenEmails: number = 1000 // 1 second delay
+    delayBetweenEmails: number = 1000
   ): Promise<EmailResult[]> {
     const results: EmailResult[] = [];
     
@@ -203,7 +212,7 @@ export class GmailService {
       console.log(`[Gmail] Sending email ${i + 1}/${emailJobs.length} to ${job.candidate.email}`);
       
       const result = await this.sendRecruitingEmail(
-        userTokens,
+        userId,  // ← Changed from userTokens
         job.candidate,
         job.subject,
         job.body
@@ -216,7 +225,6 @@ export class GmailService {
         console.warn(`[Gmail] Rate limited, waiting 60 seconds...`);
         await new Promise(resolve => setTimeout(resolve, 60000));
       } else if (i < emailJobs.length - 1) {
-        // Wait between emails to respect rate limits
         await new Promise(resolve => setTimeout(resolve, delayBetweenEmails));
       }
     }

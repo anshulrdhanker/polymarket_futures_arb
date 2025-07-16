@@ -3,6 +3,7 @@ import { emailQueue } from '../config/redis';
 import { EmailJobData } from '../services/queueTypes';
 import { OpenAIService } from '../services/openaiService';
 import { GmailService, GmailTokens } from '../services/gmailService';
+import { TokenManager } from '../services/tokenManager';
 import { User } from '../models/User';
 import { NonRetriableError } from '../utils/errors';
 import { checkEmailRateLimit } from '../middleware/rateLimiter';
@@ -29,44 +30,11 @@ async function processEmail(job: { data: EmailJobData }): Promise<void> {
       throw error;
     }
     
-    // Step 2: Get user's Gmail tokens
-    console.log(`[Email ${candidateId}] Getting user Gmail tokens`);
-    const user = await User.findById(userId);
-    if (!user) {
-      throw new NonRetriableError(`User ${userId} not found`);
-    }
-    
-    // Check if user has Gmail tokens
-    if (!user.gmail_token || !user.gmail_refresh_token) {
-      throw new NonRetriableError('User has not connected Gmail account');
-    }
-    
-    const userTokens: GmailTokens = {
-      access_token: user.gmail_token,
-      refresh_token: user.gmail_refresh_token,
-      token_type: 'Bearer'
-    };
-    
-    // Step 3: Validate/refresh tokens if needed
-    console.log(`[Email ${candidateId}] Validating Gmail tokens`);
-    const tokensValid = await GmailService.validateTokens(userTokens);
-    
-    let finalTokens = userTokens;
-    if (!tokensValid) {
-      console.log(`[Email ${candidateId}] Tokens expired, refreshing...`);
-      const refreshedTokens = await GmailService.refreshTokens(userTokens);
-      
-      if (!refreshedTokens) {
-        throw new Error('Failed to refresh Gmail tokens - user needs to reconnect');
-      }
-      
-      finalTokens = refreshedTokens;
-      
-      // Update user's tokens in database
-      const tokensUpdated = await User.updateGmailTokens(userId, refreshedTokens);
-      if (!tokensUpdated) {
-        throw new Error('Failed to update Gmail tokens in database');
-      }
+    // Step 2: Get valid Gmail tokens (handled by TokenManager)
+    console.log(`[Email ${candidateId}] Getting valid Gmail tokens`);
+    const validTokens = await TokenManager.getValidTokens(userId);
+    if (!validTokens) {
+      throw new NonRetriableError('User has not connected Gmail account or tokens are invalid');
     }
     
     // Step 4: Generate email content using OpenAI
@@ -89,7 +57,7 @@ async function processEmail(job: { data: EmailJobData }): Promise<void> {
     // Step 5: Send email via Gmail
     console.log(`[Email ${candidateId}] Sending email via Gmail`);
     const emailResult = await GmailService.sendRecruitingEmail(
-      finalTokens,
+      userId,
       candidate,
       emailContent.subject,
       emailContent.body
