@@ -14,13 +14,9 @@ async function processCampaign(job: { data: CampaignJobData }): Promise<void> {
   try {
     console.log(`[Campaign ${campaignId}] Starting campaign processing`);
     
-    // Step 1: Convert conversation to PDL query
-    console.log(`[Campaign ${campaignId}] Converting conversation to PDL query`);
-    const pdlQuery = await OpenAIService.convertToPDLQuery(conversationData);
-    
-    // Step 2: Search for candidates
+    // Step 1: Search for candidates
     console.log(`[Campaign ${campaignId}] Searching for candidates`);
-    const candidates = await PDLService.searchCandidates(pdlQuery);
+    const candidates = await PDLService.searchFromConversation(conversationData, 50);
     
     if (!candidates || candidates.length === 0) {
       console.warn(`[Campaign ${campaignId}] No candidates found`);

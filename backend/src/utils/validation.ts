@@ -1,39 +1,149 @@
 import { ConversationData, ValidationError, ValidationResult } from '../services/queueTypes';
 
 /**
- * Validates conversation data for campaign creation
+ * Validates outreach data for campaign creation based on outreach type
  */
 export function validateConversationData(data: Partial<ConversationData>): ValidationResult {
   const errors: ValidationError[] = [];
-  const requiredFields: Array<keyof ConversationData> = [
-    'recruiter_title',
-    'recruiter_company',
-    'recruiter_mission',
-    'role_title',
-    'skills',
-    'experience_level'
-  ];
 
-  // Check required fields
-  requiredFields.forEach(field => {
-    if (!data[field] || (typeof data[field] === 'string' && !(data[field] as string).trim())) {
+  // Validate base required fields explicitly
+  if (!data.outreach_type || (typeof data.outreach_type === 'string' && !data.outreach_type.trim())) {
+    errors.push({
+      field: 'outreach_type',
+      code: 'REQUIRED_FIELD',
+      message: 'Outreach type is required',
+      received: data.outreach_type
+    });
+  }
+
+  if (!data.user_title || (typeof data.user_title === 'string' && !data.user_title.trim())) {
+    errors.push({
+      field: 'user_title',
+      code: 'REQUIRED_FIELD',
+      message: 'User title is required',
+      received: data.user_title
+    });
+  }
+
+  if (!data.user_company || (typeof data.user_company === 'string' && !data.user_company.trim())) {
+    errors.push({
+      field: 'user_company',
+      code: 'REQUIRED_FIELD',
+      message: 'User company is required',
+      received: data.user_company
+    });
+  }
+
+  if (!data.user_mission || (typeof data.user_mission === 'string' && !data.user_mission.trim())) {
+    errors.push({
+      field: 'user_mission',
+      code: 'REQUIRED_FIELD',
+      message: 'User mission is required',
+      received: data.user_mission
+    });
+  }
+
+  // Validate outreach type
+  const validOutreachTypes = ['sales', 'recruiting'];
+  if (!data.outreach_type || !validOutreachTypes.includes(data.outreach_type)) {
+    errors.push({
+      field: 'outreach_type',
+      code: 'INVALID_VALUE',
+      message: 'Outreach type must be either "sales" or "recruiting"',
+      received: data.outreach_type
+    });
+  }
+
+  // Validate recruiting-specific fields if outreach_type is recruiting
+  if (data.outreach_type === 'recruiting') {
+    if (!data.role_title || (typeof data.role_title === 'string' && !data.role_title.trim())) {
       errors.push({
-        field,
+        field: 'role_title',
         code: 'REQUIRED_FIELD',
-        message: `${field.replace('_', ' ')} is required`,
-        received: data[field]
+        message: 'Role title is required for recruiting outreach',
+        received: data.role_title
       });
     }
-  });
 
-  // Validate experience level enum
-  if (data.experience_level && !isValidExperienceLevel(data.experience_level)) {
-    errors.push({
-      field: 'experience_level',
-      code: 'INVALID_VALUE',
-      message: 'Experience level must be one of: junior, mid, senior, lead',
-      received: data.experience_level
-    });
+    let hasValidSkills = false;
+    if (Array.isArray(data.skills)) {
+      hasValidSkills = data.skills.length > 0 && 
+                     data.skills.every(skill => {
+                       if (typeof skill !== 'string') return false;
+                       return skill.trim().length > 0;
+                     });
+    } else if (typeof data.skills === 'string') {
+      hasValidSkills = (data.skills as string).trim().length > 0;
+    }
+
+    if (!hasValidSkills) {
+      errors.push({
+        field: 'skills',
+        code: 'REQUIRED_FIELD',
+        message: 'At least one skill is required for recruiting outreach',
+        received: data.skills
+      });
+    }
+
+    if (!data.experience_level || !['junior', 'mid', 'senior', 'lead'].includes(data.experience_level)) {
+      errors.push({
+        field: 'experience_level',
+        code: 'REQUIRED_FIELD',
+        message: 'Experience level is required for recruiting outreach and must be one of: junior, mid, senior, lead',
+        received: data.experience_level
+      });
+    }
+  }
+
+  // Validate sales-specific fields if outreach_type is sales
+  if (data.outreach_type === 'sales') {
+    if (!data.buyer_title || (typeof data.buyer_title === 'string' && !data.buyer_title.trim())) {
+      errors.push({
+        field: 'buyer_title',
+        code: 'REQUIRED_FIELD',
+        message: 'Buyer title is required for sales outreach',
+        received: data.buyer_title
+      });
+    }
+
+    if (!data.pain_point || (typeof data.pain_point === 'string' && !data.pain_point.trim())) {
+      errors.push({
+        field: 'pain_point',
+        code: 'REQUIRED_FIELD',
+        message: 'Pain point is required for sales outreach',
+        received: data.pain_point
+      });
+    }
+  }
+
+  // Validate shared fields
+  if (data.outreach_type) {
+    if (!data.company_size || (typeof data.company_size === 'string' && !data.company_size.trim())) {
+      errors.push({
+        field: 'company_size',
+        code: 'REQUIRED_FIELD',
+        message: 'Company size is required for outreach',
+        received: data.company_size
+      });
+    }
+
+    if (!data.industry || (typeof data.industry === 'string' && !data.industry.trim())) {
+      errors.push({
+        field: 'industry',
+        code: 'REQUIRED_FIELD',
+        message: 'Industry is required for outreach',
+        received: data.industry
+      });
+    }
+
+    if (!data.location || (typeof data.location === 'string' && !data.location.trim())) {
+      errors.push({
+        field: 'location',
+        code: 'REQUIRED_FIELD',
+        message: 'Location is required for outreach',
+        received: data.location
+      });
+    }
   }
 
   return {

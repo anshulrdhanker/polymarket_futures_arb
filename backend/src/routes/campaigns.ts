@@ -3,7 +3,8 @@ import { authenticateUser } from '../middleware/authMiddleware';
 import { campaignCreationLimiter } from '../middleware/rateLimit';
 import campaignController from '../controllers/campaignController';
 import { OpenAIService, ConversationState } from '../services/openaiService';
-import { PDLService } from '../services/pdlService';
+import { PDLService, Candidate } from '../services/pdlService';
+import { emailQueue } from '../config/redis';
 
 const router = Router();
 
@@ -81,8 +82,7 @@ router.post(
       res.json({
         response: response.message,
         conversationState: response.conversationState,
-        should_search: response.conversationState.isComplete,
-        pdlQuery: response.pdlQuery
+        should_search: response.conversationState.isComplete
       });
       return;
 
@@ -118,21 +118,27 @@ router.post(
 
       // Use PDL service to search for real candidates
       if (conversationState?.collectedData) {
-        // Search directly from conversation data
+        // Search directly from conversation data with progressive relaxation
         console.log('Searching candidates using conversation data for campaign:', campaignId);
         candidates = await PDLService.searchFromConversation(
           conversationState.collectedData, 
           maxCandidates
         );
         
-        // Also get the PDL query for logging
-        if (!searchQuery) {
-          searchQuery = await OpenAIService.convertToPDLQuery(conversationState.collectedData);
-        }
+        // PDL query is now built directly by PDLService
+        // No need to generate it separately for logging
       } else if (searchQuery) {
         // Search using provided PDL query
         console.log('Searching candidates using provided PDL query for campaign:', campaignId);
-        candidates = await PDLService.searchCandidates(searchQuery, maxCandidates);
+        // Convert searchQuery to ConversationData format expected by ensureMinimumCandidates
+        const conversationData = {
+          outreach_type: 'recruiting',  // Default to recruiting if not specified
+          user_title: '',
+          user_company: '',
+          user_mission: '',
+          ...searchQuery  // Spread any matching fields from the query
+        };
+        candidates = await PDLService.searchFromConversation(conversationData, maxCandidates);
       } else {
         res.status(400).json({ 
           error: 'Either conversationState with collectedData or pdlQuery is required' 
@@ -141,7 +147,7 @@ router.post(
       }
 
       // Transform PDL candidates to frontend format
-      const prospects = candidates.map(candidate => ({
+      const prospects = candidates.map((candidate: Candidate) => ({
         name: candidate.full_name || `${candidate.first_name} [Last Name Private]`,
         title: candidate.job_title || 'Title not available',
         company: candidate.job_company_name || 'Company not available',
@@ -194,102 +200,69 @@ router.post(
   '/:id/outreach',
   asyncHandler(async (req, res) => {
     const { id: campaignId } = req.params;
-    const { prospects, emailTemplate } = req.body;
+    const { prospects, conversationState } = req.body;
 
     if (!prospects || !Array.isArray(prospects) || prospects.length === 0) {
       res.status(400).json({ error: 'Prospects array is required' });
       return;
     }
 
+    if (!conversationState?.collectedData) {
+      res.status(400).json({ error: 'Campaign conversation data is required' });
+      return;
+    }
+
     try {
-      // TODO: Get campaign info and email template from database
-      const mockCampaignInfo = {
-        role_title: 'Software Engineer',
-        recruiter_name: 'John Recruiter',
-        recruiter_company: 'Tech Corp',
-        recruiter_title: 'Senior Recruiter',
-        recruiter_mission: 'We help companies build amazing products',
-        location: 'San Francisco, CA',
-        salary_range: '$120k - $160k',
-        is_remote: 'Hybrid'
+      // Transform conversation data to CampaignInfo format
+      const campaignData = {
+        role_title: conversationState.collectedData.role_title || 'Position',
+        recruiter_name: conversationState.collectedData.user_title || 'Recruiter',
+        recruiter_company: conversationState.collectedData.user_company || 'Company',
+        recruiter_title: conversationState.collectedData.user_title || 'Recruiter',
+        recruiter_mission: conversationState.collectedData.user_mission || 'Our mission',
+        location: conversationState.collectedData.location || 'Remote',
+        salary_range: undefined,
+        is_remote: conversationState.collectedData.location?.toLowerCase().includes('remote') ? 'Yes' : 'No'
       };
 
-      const defaultTemplate = `
-Hi {name},
+      // Queue email jobs for each prospect
+      const jobPromises = prospects.map((prospect, index) => {
+        return emailQueue.add('email-sending', {
+          campaignId,
+          candidateId: `${campaignId}-${index}`,
+          candidate: {
+            full_name: prospect.name,
+            current_title: prospect.title,
+            current_company: prospect.company,
+            skills: prospect.skills || [],
+            location: prospect.location,
+            experience_years: prospect.experience_years,
+            selected_skill: prospect.skills?.[0] || undefined
+          },
+          campaignData,
+          userId: 'temp-user-id' // TODO: Replace with req.user.id when auth is enabled
+        });
+      });
 
-I hope this email finds you well! I came across your profile and was impressed by your experience with {skills}.
-
-We're currently looking for a {role_title} to join our team at {recruiter_company}. {recruiter_mission}
-
-I'd love to chat more about this opportunity if you're interested. Are you available for a quick 15-minute call this week?
-
-Best regards,
-{recruiter_name}
-{recruiter_title}
-{recruiter_company}
-      `.trim();
-
-      const template = emailTemplate || defaultTemplate;
-      const results = [];
-
-      // Process each prospect
-      for (const prospect of prospects) {
-        try {
-          // Generate personalized email using OpenAI
-          const emailContent = await OpenAIService.generateRecruitingEmail(
-            prospect,
-            mockCampaignInfo,
-            template
-          );
-
-          // TODO: Send email via Gmail API
-          // await gmailService.sendEmail({
-          //   to: prospect.email,
-          //   subject: emailContent.subject,
-          //   body: emailContent.body
-          // });
-
-          results.push({
-            prospect: prospect.name,
-            email: prospect.email,
-            status: 'sent',
-            subject: emailContent.subject,
-            // Don't return full email body for privacy
-            preview: emailContent.body.substring(0, 100) + '...'
-          });
-
-        } catch (error) {
-          console.error(`Failed to send email to ${prospect.name}:`, error);
-          results.push({
-            prospect: prospect.name,
-            email: prospect.email,
-            status: 'failed',
-            error: 'Failed to generate or send email'
-          });
-        }
-      }
-
-      // Count successful sends
-      const successful = results.filter(r => r.status === 'sent').length;
-      const failed = results.filter(r => r.status === 'failed').length;
+      await Promise.all(jobPromises);
 
       res.json({
-        message: `Outreach process completed`,
+        message: `Queued ${prospects.length} email jobs for processing`,
         summary: {
           total: prospects.length,
-          successful,
-          failed
+          queued: prospects.length,
+          failed: 0
         },
-        results,
-        campaign_id: campaignId
+        campaign_id: campaignId,
+        status: 'queued'
       });
 
     } catch (error) {
-      console.error('Error in outreach endpoint:', error);
+      console.error('Error queuing email jobs:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       res.status(500).json({ 
-        error: 'Failed to send outreach emails',
-        message: 'Unable to send emails at this time. Please try again.',
+        error: 'Failed to queue outreach emails',
+        message: 'Unable to queue emails for sending. Please try again.',
         details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
       });
     }

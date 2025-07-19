@@ -3,8 +3,8 @@ dotenv.config();
 
 // Database Configuration
 export const DB_CONFIG = {
-  URL: process.env.DATABASE_URL!,
-  NAME: process.env.DATABASE_NAME!,
+  URL: process.env.SUPABASE_URL!,
+  NAME: process.env.SUPABASE_ANON_KEY!,
 };
 
 // Redis Configuration

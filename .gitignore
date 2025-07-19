@@ -21,6 +21,10 @@ build
 # Build output
 dist/
 
+# Compiled JavaScript files in source (should only be in dist/)
+backend/src/**/*.js
+backend/src/**/*.js.map
+
 # Debug logs
 logs
 *.log

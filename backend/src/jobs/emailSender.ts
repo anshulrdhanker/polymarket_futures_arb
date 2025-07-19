@@ -39,7 +39,7 @@ async function processEmail(job: { data: EmailJobData }): Promise<void> {
     
     // Step 4: Generate email content using OpenAI
     console.log(`[Email ${candidateId}] Generating email content`);
-    const template = "Hi {name}, I came across your background in {skills} and thought you'd be a great fit for a {role_title} role here at {recruiter_company}. We're passionate about {recruiter_mission}, and I think your experience aligns perfectly with what we're looking for. Would you be open to a quick chat about this opportunity? Best regards, {recruiter_name}";
+    const template = "Hi {name}, I came across your experience and thought you'd be a great fit for a {role_title} role here at {recruiter_company}. We're passionate about {recruiter_mission}, and I think your experience aligns perfectly with what we're looking for. Would you be open to a quick chat about this opportunity? Best, {recruiter_name}";
     
     const emailContent = await OpenAIService.generateRecruitingEmail(
       candidate,

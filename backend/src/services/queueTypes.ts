@@ -1,3 +1,5 @@
+import { CreateCampaignData } from '../models/Campaign';
+
 // Campaign status types
 export type CampaignStatus = 
   | 'draft'          // Initial state
@@ -9,41 +11,30 @@ export type CampaignStatus =
   | 'completed'      // All emails sent
   | 'failed';        // Processing failed
 
-// Core campaign data structure
-export interface CreateCampaignData {
-  user_id: string;
-  name: string;
-  role_title: string;
-  role_requirements: string;
-  company_description: string;
-  job_location?: string;
-  salary_range?: string;
-  remote_ok?: boolean;
-  target_emails?: number;
-  status?: CampaignStatus;
-  recruiter_name: string;
-  recruiter_company: string;
-  recruiter_title: string;
-  recruiter_mission: string;
-  prospect_industry: string;
-  is_remote: string;
-  specific_skills?: string[];
-  experience_level?: string;
-  company_size?: string;
-  additional_variables?: Record<string, any>;
-}
-
-// Conversation data from user interaction
+// Conversation data structure for user interaction
 export interface ConversationData {
-  recruiter_title: string;
-  recruiter_company: string;
-  recruiter_mission: string;
-  role_title: string;
-  skills: string;
-  experience_level: 'junior' | 'mid' | 'senior' | 'lead';
+  // Base required fields for all outreach types
+  outreach_type: 'sales' | 'recruiting';
+  user_title: string;
+  user_company: string;
+  user_mission: string;
+  
+  // Optional fields for recruiting
+  role_title?: string;
+  skills?: string[];  // Using string[] to match usage in the codebase
+  experience_level?: 'junior' | 'mid' | 'senior' | 'lead';
+  
+  // Optional fields for sales
+  buyer_title?: string;
+  pain_point?: string;
+  
+  // Optional fields for both
   company_size?: string;
   industry?: string;
   location?: string;
+  
+  // Additional metadata
+  additional_variables?: Record<string, any>;
 }
 
 // Validation types

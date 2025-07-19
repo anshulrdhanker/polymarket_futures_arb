@@ -4,23 +4,32 @@ import { CampaignStatus } from '../services/queueTypes';
 export interface CreateCampaignData {
   user_id: string;
   name: string;
-  role_title: string;
-  role_requirements: string;
-  company_description: string;
+  outreach_type: 'sales' | 'recruiting';
+  
+  // Role-specific fields (optional since they depend on outreach type)
+  role_title?: string;
+  role_requirements?: string;
+  
+  // User/company fields
+  user_name: string;
+  user_company: string;
+  user_title: string;
+  user_mission: string;
+  
+  // Campaign settings
+  industry: string;
+  is_remote: string; // "remote", "hybrid", "on-site"
   job_location?: string;
   salary_range?: string;
   remote_ok?: boolean;
   target_emails?: number;
-  // Variable storage for email personalization
-  recruiter_name: string;
-  recruiter_company: string;
-  recruiter_title: string;
-  recruiter_mission: string;
-  prospect_industry: string;
-  is_remote: string; // "remote", "hybrid", "on-site"
+  
+  // Skills and experience
   specific_skills?: string[];
   experience_level?: string;
   company_size?: string;
+  
+  // Additional metadata
   additional_variables?: Record<string, string>;
 }
 
@@ -28,9 +37,21 @@ export interface CampaignProfile {
   id: string;
   user_id: string;
   name: string;
-  role_title: string;
-  role_requirements: string;
-  company_description: string;
+  outreach_type: 'sales' | 'recruiting';
+  
+  // Role-specific fields
+  role_title: string | null;
+  role_requirements: string | null;
+  buyer_title: string | null;
+  
+  // User/company fields
+  user_company: string;
+  user_title: string;
+  user_mission: string;
+  
+  // Campaign settings
+  industry: string;
+  location: string;
   job_location: string | null;
   salary_range: string | null;
   remote_ok: boolean;
@@ -41,17 +62,13 @@ export interface CampaignProfile {
   total_sent: number;
   created_at: string;
   completed_at: string | null;
-  // Variable storage for email personalization
-  recruiter_name: string;
-  recruiter_company: string;
-  recruiter_title: string;
-  recruiter_mission: string;
-  prospect_industry: string;
-  is_remote: string;
-  specific_skills: string[] | null;
+  
+  // Skills and experience
   experience_level: string | null;
   company_size: string | null;
-  additional_variables: Record<string, string> | null;
+  
+  // Additional metadata (stored in pdl_search_params)
+  additional_variables?: Record<string, string>;
 }
 
 export interface CampaignStats {
@@ -64,7 +81,7 @@ export interface CampaignStats {
 
 export class Campaign {
   /**
-   * Create a new recruiting campaign
+   * Create a new outreach campaign
    */
   static async create(campaignData: CreateCampaignData): Promise<CampaignProfile | null> {
     try {
@@ -73,24 +90,25 @@ export class Campaign {
         .insert([{
           user_id: campaignData.user_id,
           name: campaignData.name,
-          role_title: campaignData.role_title,
-          role_requirements: campaignData.role_requirements,
-          company_description: campaignData.company_description,
+          outreach_type: campaignData.outreach_type,
+          role_title: campaignData.role_title || null,
+          role_requirements: campaignData.role_requirements || null,
+          buyer_title: campaignData.outreach_type === 'sales' ? campaignData.role_title : null, // buyer_title maps to role_title for sales
+          user_company: campaignData.user_company,
+          user_title: campaignData.user_title,
+          user_mission: campaignData.user_mission,
+          industry: campaignData.industry,
+          location: campaignData.job_location || '',
           job_location: campaignData.job_location || null,
           salary_range: campaignData.salary_range || null,
           remote_ok: campaignData.remote_ok || false,
           target_emails: campaignData.target_emails || 50,
+          experience_level: campaignData.experience_level || null,
+          company_size: campaignData.company_size || null,
           status: 'draft',
           pdl_search_params: {
-            // Store extra data in this JSON field
-            recruiter_name: campaignData.recruiter_name,
-            recruiter_company: campaignData.recruiter_company,
-            recruiter_title: campaignData.recruiter_title,
-            recruiter_mission: campaignData.recruiter_mission,
-            prospect_industry: campaignData.prospect_industry,
+            // Store search-related data and additional variables
             specific_skills: campaignData.specific_skills,
-            experience_level: campaignData.experience_level,
-            company_size: campaignData.company_size,
             additional_variables: campaignData.additional_variables,
           },
           total_found: 0,
@@ -223,27 +241,27 @@ export class Campaign {
       if (!campaign) return null;
 
       const variables: Record<string, string> = {
-        role_title: campaign.role_title,
-        recruiter_name: campaign.recruiter_name,
-        recruiter_company: campaign.recruiter_company,
-        recruiter_title: campaign.recruiter_title,
-        recruiter_mission: campaign.recruiter_mission,
-        prospect_industry: campaign.prospect_industry,
-        location: campaign.job_location || '',
+        role_title: campaign.role_title || campaign.buyer_title || '',
+        user_company: campaign.user_company,
+        user_title: campaign.user_title,
+        user_mission: campaign.user_mission,
+        industry: campaign.industry,
+        location: campaign.location,
+        job_location: campaign.job_location || '',
         salary_range: campaign.salary_range || '',
-        is_remote: campaign.is_remote,
         experience_level: campaign.experience_level || '',
         company_size: campaign.company_size || '',
+        outreach_type: campaign.outreach_type,
       };
 
-      // Add specific skills as comma-separated string
-      if (campaign.specific_skills && campaign.specific_skills.length > 0) {
-        variables.required_skills = campaign.specific_skills.join(', ');
+      // Add specific skills from pdl_search_params if available
+      if (campaign.pdl_search_params?.specific_skills && Array.isArray(campaign.pdl_search_params.specific_skills)) {
+        variables.required_skills = campaign.pdl_search_params.specific_skills.join(', ');
       }
 
-      // Add any additional variables
-      if (campaign.additional_variables) {
-        Object.assign(variables, campaign.additional_variables);
+      // Add any additional variables from pdl_search_params
+      if (campaign.pdl_search_params?.additional_variables) {
+        Object.assign(variables, campaign.pdl_search_params.additional_variables);
       }
 
       return variables;
@@ -257,13 +275,11 @@ export class Campaign {
    * Update campaign variables
    */
   static async updateVariables(campaignId: string, variables: {
-    recruiter_name?: string;
-    recruiter_company?: string;
-    recruiter_title?: string;
-    recruiter_mission?: string;
-    prospect_industry?: string;
-    is_remote?: string;
-    specific_skills?: string[];
+    user_company?: string;
+    user_title?: string;
+    user_mission?: string;
+    industry?: string;
+    location?: string;
     experience_level?: string;
     company_size?: string;
     additional_variables?: Record<string, string>;
@@ -300,38 +316,39 @@ export class Campaign {
       };
 
       // Add role/title criteria
-      if (campaign.role_title) {
+      const titleToSearch = campaign.role_title || campaign.buyer_title;
+      if (titleToSearch) {
         searchParams.required.push({
           field: "job_title",
           condition: "contains",
-          value: campaign.role_title
+          value: titleToSearch
         });
       }
 
-      // Add skills criteria
-      if (campaign.specific_skills && campaign.specific_skills.length > 0) {
+      // Add skills criteria from pdl_search_params
+      if (campaign.pdl_search_params?.specific_skills && Array.isArray(campaign.pdl_search_params.specific_skills)) {
         searchParams.required.push({
           field: "skills",
           condition: "contains",
-          value: campaign.specific_skills
+          value: campaign.pdl_search_params.specific_skills
         });
       }
 
       // Add industry criteria
-      if (campaign.prospect_industry) {
+      if (campaign.industry) {
         searchParams.required.push({
           field: "industry",
           condition: "contains",
-          value: campaign.prospect_industry
+          value: campaign.industry
         });
       }
 
-      // Add location criteria if not remote
-      if (campaign.is_remote !== 'remote' && campaign.job_location) {
+      // Add location criteria
+      if (campaign.location && campaign.location !== 'remote') {
         searchParams.required.push({
           field: "location_region",
           condition: "contains",
-          value: campaign.job_location
+          value: campaign.location
         });
       }
 
@@ -357,14 +374,12 @@ export class Campaign {
   static createEmailVariables(campaign: CampaignProfile, candidate: any): Record<string, string> {
     return {
       // Campaign variables
-      role_title: campaign.role_title,
-      recruiter_name: campaign.recruiter_name,
-      recruiter_company: campaign.recruiter_company,
-      recruiter_title: campaign.recruiter_title,
-      recruiter_mission: campaign.recruiter_mission,
-      location: campaign.job_location || '',
+      role_title: campaign.role_title || campaign.buyer_title || '',
+      user_company: campaign.user_company,
+      user_title: campaign.user_title,
+      user_mission: campaign.user_mission,
+      location: campaign.job_location || campaign.location || '',
       salary_range: campaign.salary_range || '',
-      is_remote: campaign.is_remote,
       
       // Candidate variables
       name: candidate.full_name || '',
@@ -374,8 +389,8 @@ export class Campaign {
       candidate_location: candidate.location || '',
       experience_years: candidate.experience_years ? candidate.experience_years.toString() : '',
       
-      // Additional variables
-      ...(campaign.additional_variables || {})
+      // Additional variables from pdl_search_params
+      ...(campaign.pdl_search_params?.additional_variables || {})
     };
   }
 
