@@ -15,6 +15,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.50.2",
     "@types/jsonwebtoken": "^9.0.10",
+    "bcrypt": "^6.0.0",
     "bullmq": "^5.56.1",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
@@ -31,6 +32,7 @@
     "stripe": "^18.3.0"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",

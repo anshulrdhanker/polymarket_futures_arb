@@ -54,49 +54,27 @@ export interface CampaignInfo {
   is_remote: string;
 }
 
-export interface ConversationState {
-  currentStep: number;
-  isComplete: boolean;
-  collectedData: {
-    outreach_type?: 'recruiting' | 'sales';
-    user_title?: string;
-    user_company?: string;
-    user_mission?: string;
-    tone?: string;
-    // Recruiting specific
-    role_title?: string;
-    skills?: string;
-    experience_level?: string;
-    // Sales specific
-    buyer_title?: string;
-    pain_point?: string;
-    // Shared
-    company_size?: string;
-    industry?: string;
-    location?: string;
-  };
-}
-
-export interface ScriptedConversationResponse {
-  message: string;
-  conversationState: ConversationState;
+export interface ConversationData {
+  outreach_type: 'recruiting' | 'sales';
+  user_title?: string;
+  user_company?: string;
+  user_mission?: string;
+  tone?: string;
+  // Recruiting specific
+  role_title?: string;
+  skills?: string;
+  experience_level?: string;
+  // Sales specific
+  buyer_title?: string;
+  pain_point?: string;
+  // Shared
+  company_size?: string;
+  industry?: string;
+  location?: string;
 }
 
 export class OpenAIService {
-  /**
-   * Base conversation flow (applies to both recruiting and sales)
-   */
-  private static readonly BASE_SCRIPT = [
-    "Hey — I'll help you find the right people and send personalized emails to them automatically. First, what kind of outreach are you doing right now — sales or recruiting?",
-    "Got it. Let's personalize everything to sound like it's coming from you. What's your name and role at the company?",
-    "And what's the name of your company?",
-    "In one sentence, what does your company do? I'll use this to write contextually relevant emails.",
-    "What tone should I write in? (Casual, direct, professional, witty?)"
-  ];
-
-  /**
-   * Recruiting-specific questions
-   */
+  // Script templates for email composition
   private static readonly RECRUITING_SCRIPT = [
     "What role are you hiring for?",
     "What are some must-have skills or tools? (e.g. Python, React, Salesforce) — or just say 'skip' if not relevant.",
@@ -105,51 +83,6 @@ export class OpenAIService {
     "Any specific industries? (e.g. Fintech, SaaS, etc.)",
     "Where should they be located — or is this remote?"
   ];
-
-  /**
-   * Sales-specific questions
-   */
-  private static readonly SALES_SCRIPT = [
-    "Who is your ideal buyer? (e.g. Head of Marketing, Founder, CTO, Account Executive)",
-    "What type of companies do they work at? (e.g. SaaS startups, law firms, eCommerce brands)",
-    "What size are these companies? (Solo, 2-10, 11-50, 51-200, etc.)",
-    "What pain point does your product solve for this buyer? (This helps me make your emails hit harder)",
-    "Any specific industries? (e.g. Fintech, SaaS, etc.)",
-    "Any geography preference — or is this remote/global?"
-  ];
-
-  private static readonly COMPLETION_MESSAGE = 
-    "Thanks for sharing everything. I'm ready to start finding the perfect people and writing personalized emails. But first, you'll need to log in with Gmail so I can send on your behalf. Just click the 'Try 3 for free' button to get started.";
-
-  /**
-   * Get the appropriate conversation script based on current state
-   */
-  private static getConversationScript(collectedData: ConversationState['collectedData']): string[] {
-    const baseLength = this.BASE_SCRIPT.length;
-    
-    if (!collectedData.outreach_type) {
-      return this.BASE_SCRIPT;
-    } else if (collectedData.outreach_type === 'recruiting') {
-      return [...this.BASE_SCRIPT, ...this.RECRUITING_SCRIPT];
-    } else {
-      return [...this.BASE_SCRIPT, ...this.SALES_SCRIPT];
-    }
-  }
-
-  /**
-   * Get field mapping for data extraction based on conversation step and type
-   */
-  private static getStepMapping(collectedData: ConversationState['collectedData']): string[] {
-    const baseMapping = ['outreach_type', 'user_title', 'user_company', 'user_mission', 'tone'];
-    
-    if (!collectedData.outreach_type) {
-      return baseMapping;
-    } else if (collectedData.outreach_type === 'recruiting') {
-      return [...baseMapping, 'role_title', 'skills', 'experience_level', 'company_size', 'industry', 'location'];
-    } else {
-      return [...baseMapping, 'buyer_title', 'company_size', 'experience_level', 'pain_point', 'industry', 'location'];
-    }
-  }
 
   /**
    * Helper method for OpenAI API calls with retry logic
@@ -180,7 +113,6 @@ export class OpenAIService {
         }
 
         return responseText;
-
       } catch (error: any) {
         const isRetryableError = 
           error?.status === 429 || // Rate limit
@@ -216,103 +148,31 @@ export class OpenAIService {
   }
 
   /**
-   * Process scripted conversation step with branching logic
+   * Analyze role requirements and convert to PDL search parameters
    */
-  static async processScriptedConversation(
-    userMessage: string,
-    currentState: ConversationState
-  ): Promise<ScriptedConversationResponse> {
+  static async analyzeRole(roleInput: RoleInput): Promise<PDLQuery> {
     try {
-      // If conversation is already complete, don't process further
-      if (currentState.isComplete) {
-        return {
-          message: this.COMPLETION_MESSAGE,
-          conversationState: currentState
-        };
-      }
+      const prompt = `Convert the following role requirements into structured search parameters for a candidate search:
 
-      // Extract information from user's response using AI
-      const extractedInfo = await this.extractInfoFromResponse(
-        userMessage,
-        currentState.currentStep,
-        currentState.collectedData
-      );
+${JSON.stringify(roleInput, null, 2)}
 
-      // Update collected data
-      const updatedData = { ...currentState.collectedData, ...extractedInfo };
+Return a JSON object with the following structure:
+{
+  "job_title": ["array of job titles"],
+  "skills": ["array of required skills"],
+  "location": ["array of locations"],
+  "experience_level": ["array of experience levels"],
+  "industry": ["array of industries"],
+  "company_size": ["array of company sizes"],
+  "current_company": ["array of current companies"]
+}
 
-      // Get the appropriate script based on the updated data
-      const conversationScript = this.getConversationScript(updatedData);
-
-      // Advance to next step
-      const nextStep = currentState.currentStep + 1;
-      
-      // Check if conversation is complete
-      if (nextStep >= conversationScript.length) {
-        const finalState: ConversationState = {
-          currentStep: nextStep,
-          isComplete: true,
-          collectedData: updatedData
-        };
-
-        return {
-          message: this.COMPLETION_MESSAGE,
-          conversationState: finalState
-        };
-      }
-
-      // Return next scripted message
-      const newState: ConversationState = {
-        currentStep: nextStep,
-        isComplete: false,
-        collectedData: updatedData
-      };
-
-      return {
-        message: conversationScript[nextStep],
-        conversationState: newState
-      };
-
-    } catch (error) {
-      console.error('Error processing scripted conversation:', error);
-      
-      // Return current question again on error
-      const conversationScript = this.getConversationScript(currentState.collectedData);
-      return {
-        message: conversationScript[currentState.currentStep],
-        conversationState: currentState
-      };
-    }
-  }
-
-  /**
-   * Extract specific information based on conversation step and type
-   */
-  private static async extractInfoFromResponse(
-    userMessage: string,
-    currentStep: number,
-    collectedData: ConversationState['collectedData']
-  ): Promise<Partial<ConversationState['collectedData']>> {
-    const stepMapping = this.getStepMapping(collectedData);
-    const fieldToExtract = stepMapping[currentStep];
-    
-    if (!fieldToExtract) return {};
-
-    // Special handling for outreach_type (first question)
-    if (fieldToExtract === 'outreach_type') {
-      const prompt = `
-Determine if the user is doing "recruiting" or "sales" from this response: "${userMessage}"
-
-Rules:
-- If they mention hiring, recruiting, candidates, talent, etc. → return "recruiting"
-- If they mention sales, prospects, customers, leads, etc. → return "sales"
-- Return only "recruiting" or "sales", nothing else
-`;
+Only include fields that are explicitly mentioned in the input.`;
 
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: "system",
-          content: "You determine if a user is doing recruiting or sales outreach. Return only 'recruiting' or 'sales'."
+          content: "You convert job role requirements into structured search parameters. Return only valid JSON."
         },
         {
           role: "user",
@@ -320,98 +180,42 @@ Rules:
         }
       ];
 
-      try {
-        const responseText = await this.callOpenAI(messages, {
-          model: "gpt-4",
-          temperature: 0.1,
-          max_tokens: 10,
-        });
-
-        const outreachType = responseText.trim().toLowerCase();
-        return { outreach_type: outreachType === 'recruiting' ? 'recruiting' : 'sales' };
-      } catch (error) {
-        console.error('Error extracting outreach type:', error);
-        return { outreach_type: 'recruiting' }; // Default fallback
-      }
-    }
-
-    // Standard field extraction
-    const prompt = `
-Extract the ${fieldToExtract} from this user response: "${userMessage}"
-
-Rules:
-- Return only the extracted information, no explanation
-- Be concise but capture the key details
-- For skills, extract as comma-separated list
-- For location, include "remote" if mentioned
-
-Response format: Just the extracted value, nothing else.
-`;
-
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: "You extract specific information from user responses. Return only the requested information, no explanations."
-      },
-      {
-        role: "user",
-        content: prompt
-      }
-    ];
-
-    try {
       const responseText = await this.callOpenAI(messages, {
         model: "gpt-4",
-        temperature: 0.1,
-        max_tokens: 100,
+        temperature: 0.2,
+        max_tokens: 500
       });
 
-      return { [fieldToExtract]: responseText.trim() };
+      return this.parseJSONResponse<PDLQuery>(responseText, 'role analysis');
     } catch (error) {
-      console.error(`Error extracting ${fieldToExtract}:`, error);
+      console.error('Error analyzing role:', error);
       return {};
     }
   }
 
-  // The convertToPDLQuery method has been removed as part of architectural improvement.
-  // PDL query building is now handled exclusively by PDLService.searchFromConversation
-  // which uses structured logic and mappings instead of OpenAI-based conversion.
-
   /**
-   * Initialize new conversation
+   * Test OpenAI API connection
    */
-  static initializeConversation(): ScriptedConversationResponse {
-    const initialState: ConversationState = {
-      currentStep: 0,
-      isComplete: false,
-      collectedData: {}
-    };
-
-    return {
-      message: this.BASE_SCRIPT[0],
-      conversationState: initialState
-    };
-  }
-
-  /**
-   * Handle off-topic responses by repeating current question
-   */
-  static handleOffTopicResponse(currentState: ConversationState): ScriptedConversationResponse {
-    const conversationScript = this.getConversationScript(currentState.collectedData);
-    return {
-      message: conversationScript[currentState.currentStep],
-      conversationState: currentState
-    };
-  }
-
-  // ... (rest of your existing methods remain the same)
-  
-  /**
-   * Analyze role requirements and convert to PDL search parameters
-   */
-  static async analyzeRole(roleInput: RoleInput): Promise<PDLQuery> {
-    // ... existing implementation
-    return {} as PDLQuery; // placeholder
+  static async testConnection(): Promise<boolean> {
+    try {
+      await this.callOpenAI(
+        [
+          {
+            role: 'user',
+            content: 'Respond with "pong"'
+          }
+        ],
+        {
+          model: 'gpt-3.5-turbo',
+          temperature: 0,
+          max_tokens: 10
+        }
+      );
+      return true;
+    } catch (error) {
+      console.error('OpenAI connection test failed:', error);
+      return false;
+    }
   }
 
   /**
@@ -501,10 +305,86 @@ Return only valid JSON, no explanations.`;
   }
 
   /**
-   * Validate OpenAI API connection
+   * Parse natural language input into structured ConversationData
+   * @param naturalLanguageInput Natural language input (e.g., "Senior React developers at fintech startups in NYC")
+   * @param outreachType Type of outreach ('recruiting' or 'sales')
+   * @returns Structured conversation data
    */
-  static async testConnection(): Promise<boolean> {
-    // ... existing implementation
-    return true; // placeholder
+  static async parseNaturalLanguageToConversationData(
+    naturalLanguageInput: string,
+    outreachType: 'recruiting' | 'sales'
+  ): Promise<ConversationData> {
+    const prompt = `Extract the following information from this job search query: "${naturalLanguageInput}"
+
+Extract the following fields as JSON. If a field is not mentioned, set it to an empty string.
+
+For recruiting:
+- role_title: The job title or role being searched for
+- skills: Comma-separated list of required skills or technologies
+- experience_level: Seniority level (e.g., Junior, Mid, Senior, Lead, Principal, Director, VP, C-level)
+- company_size: Company size (e.g., startup, small, mid-sized, large, enterprise)
+- industry: Industry or sector (e.g., fintech, healthcare, SaaS)
+- location: Geographic location or remote status
+
+For sales:
+- buyer_title: Job title of the target buyer
+- pain_point: The main problem or need being addressed
+- company_size: Target company size
+- industry: Target industry
+- location: Geographic location or remote status
+
+Return ONLY a valid JSON object with these fields.`;
+
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content: 'You are an expert at extracting structured data from natural language job searches. Return ONLY valid JSON.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ];
+
+    try {
+      const responseText = await this.callOpenAI(messages, {
+        model: 'gpt-4',
+        temperature: 0.2,
+        max_tokens: 500
+      });
+
+      // Parse the JSON response
+      const extractedData = this.parseJSONResponse<{
+        role_title?: string;
+        skills?: string;
+        experience_level?: string;
+        buyer_title?: string;
+        pain_point?: string;
+        company_size?: string;
+        industry?: string;
+        location?: string;
+      }>(responseText, 'natural language parsing');
+
+      // Create base conversation data structure with better defaults
+      const conversationData: ConversationData = {
+        outreach_type: outreachType,
+        user_title: 'User',
+        user_company: 'Company',
+        user_mission: 'Finding the right people',
+        ...extractedData
+      };
+
+      return conversationData;
+    } catch (error) {
+      console.error('Error parsing natural language to conversation data:', error);
+      
+      // Return minimal valid response on error with better defaults
+      return {
+        outreach_type: outreachType,
+        user_title: 'User',
+        user_company: 'Company',
+        user_mission: 'Finding the right people'
+      };
+    }
   }
 }

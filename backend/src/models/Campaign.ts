@@ -2,35 +2,57 @@ import { supabase } from '../config/database';
 import { CampaignStatus } from '../services/queueTypes';
 
 export interface CreateCampaignData {
+  // Existing required fields
   user_id: string;
   name: string;
   outreach_type: 'sales' | 'recruiting';
-  
-  // Role-specific fields (optional since they depend on outreach type)
-  role_title?: string;
-  role_requirements?: string;
-  
-  // User/company fields
   user_name: string;
   user_company: string;
   user_title: string;
   user_mission: string;
-  
-  // Campaign settings
   industry: string;
-  is_remote: string; // "remote", "hybrid", "on-site"
+  is_remote: string;
+  
+  // Existing optional fields
+  role_title?: string;
+  role_requirements?: string;
   job_location?: string;
   salary_range?: string;
   remote_ok?: boolean;
   target_emails?: number;
-  
-  // Skills and experience
   specific_skills?: string[];
   experience_level?: string;
   company_size?: string;
-  
-  // Additional metadata
   additional_variables?: Record<string, string>;
+  
+  // Search criteria from user input
+  search_criteria?: {
+    original_query: string;      // The raw "to" field input
+    bodyField?: string;          // User's personal info input
+    outreachType: 'recruiting' | 'sales';
+    timestamp?: string;          // When the search was made
+  };
+  
+  // Parsed conversation data from OpenAI
+  conversation_data?: {
+    // Recruiting fields
+    role_title?: string;
+    skills?: string;
+    experience_level?: string;
+    
+    // Sales fields  
+    buyer_title?: string;
+    pain_point?: string;
+    
+    // Shared fields
+    company_size?: string;
+    industry?: string;
+    location?: string;
+    
+    // Meta fields
+    confidence_score?: number;   // How confident OpenAI was in parsing
+    parsed_at?: string;          // When OpenAI parsed this
+  };
 }
 
 export interface CampaignProfile {

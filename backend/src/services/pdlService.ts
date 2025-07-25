@@ -168,7 +168,7 @@ export class PDLService {
    */
   static async searchFromConversation(
     conversationData: ConversationData,
-    maxCandidates: number = 50
+    maxCandidates: number = 3
   ): Promise<Candidate[]> {
     try {
       console.log('Converting conversation data to smart single PDL query:', conversationData);
@@ -251,7 +251,7 @@ export class PDLService {
       shouldClauses.push(...painClauses);
     }
 
-    // BROAD FALLBACK CLAUSES (ensure we always get results)
+    // BROAD FALLBACK CLAUSES (ensure we always get results) 
     shouldClauses.push(...this.buildFallbackClauses(data));
 
     // Build final comprehensive query

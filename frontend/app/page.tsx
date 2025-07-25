@@ -1,7 +1,172 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { Mail, Send, X, Minus, Square, Users } from 'lucide-react';
+
+// Props interface for GmailInterface
+interface GmailInterfaceProps {
+  toField: string;
+  setToField: (value: string) => void;
+  subjectField: string;
+  setSubjectField: (value: string) => void;
+  bodyField: string;
+  setBodyField: (value: string) => void;
+  outreachType: 'recruiting' | 'sales' | null;
+  setOutreachType: (value: 'recruiting' | 'sales') => void;
+  isLoading: boolean;
+  handleGmailSend: () => void;
+}
+
+// External GmailInterface component with React.memo
+const GmailInterface = memo(({
+  toField,
+  setToField,
+  subjectField,
+  setSubjectField,
+  bodyField,
+  setBodyField,
+  outreachType,
+  setOutreachType,
+  isLoading,
+  handleGmailSend
+}: GmailInterfaceProps) => {
+  // Memoized handlers for input fields
+  const handleToFieldChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setToField(e.target.value);
+  }, [setToField]);
+
+  const handleSubjectFieldChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSubjectField(e.target.value);
+  }, [setSubjectField]);
+
+  const handleBodyFieldChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setBodyField(e.target.value);
+  }, [setBodyField]);
+
+  return (
+    <div className="flex items-center justify-center p-4">
+      <div className="w-full max-w-3xl">
+        <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+            <div className="flex items-center space-x-1 text-sm font-medium text-gray-700" style={{ fontFamily: 'Satoshi, sans-serif' }}>
+              <button
+                onClick={() => setOutreachType('recruiting')}
+                className={`transition-colors duration-200 ${
+                  outreachType === 'recruiting' ? 'text-black' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Recruiting
+              </button>
+              <span className="text-gray-400">|</span>
+              <button
+                onClick={() => setOutreachType('sales')}
+                className={`transition-colors duration-200 ${
+                  outreachType === 'sales' ? 'text-black' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Sales
+              </button>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button className="p-1 hover:bg-gray-200 rounded">
+                <Minus className="h-4 w-4 text-gray-500" />
+              </button>
+              <button className="p-1 hover:bg-gray-200 rounded">
+                <Square className="h-4 w-4 text-gray-500" />
+              </button>
+              <button className="p-1 hover:bg-gray-200 rounded">
+                <X className="h-4 w-4 text-gray-500" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 space-y-2">
+            <div className="flex items-center border-b border-gray-200 py-2">
+              <label className="text-sm text-gray-600 w-14 mr-2" style={{ fontFamily: 'Satoshi, sans-serif' }}>
+                To
+              </label>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={toField}
+                  onChange={handleToFieldChange}
+                  placeholder="VP of Engineering at AI startups in SF"
+                  className="w-full py-1 text-gray-900 placeholder-gray-400 border-none outline-none text-sm"
+                  style={{ fontFamily: 'Satoshi, sans-serif' }}
+                />
+              </div>
+              <div className="flex items-center space-x-3 text-sm text-gray-500 ml-2">
+                <span>Cc</span>
+                <span>Bcc</span>
+              </div>
+            </div>
+
+            <div className="flex items-center border-b border-gray-200 py-2">
+              <label className="text-sm text-gray-600 w-14 mr-2" style={{ fontFamily: 'Satoshi, sans-serif' }}>
+                Subject
+              </label>
+              <input
+                type="text"
+                value={subjectField}
+                onChange={handleSubjectFieldChange}
+                placeholder="Subject"
+                className="flex-1 py-1 text-gray-900 placeholder-gray-400 border-none outline-none text-sm"
+                style={{ fontFamily: 'Satoshi, sans-serif' }}
+              />
+            </div>
+
+            <div className="pt-3">
+              <textarea
+                value={bodyField}
+                onChange={handleBodyFieldChange}
+                placeholder="Compose your message..."
+                rows={6}
+                className="w-full py-2 border-none outline-none text-gray-700 text-sm resize-none"
+                style={{ fontFamily: 'Satoshi, sans-serif' }}
+              />
+            </div>
+          </div>
+
+          <div className="px-4 pb-4">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handleGmailSend}
+                disabled={!toField.trim() || isLoading}
+                className={`px-6 py-2 rounded-md font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
+                  toField.trim() && !isLoading
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                style={{ fontFamily: 'Satoshi, sans-serif' }}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Searching prospects...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    <span>Search</span>
+                  </>
+                )}
+              </button>
+              
+              <div className="flex items-center space-x-2 text-gray-400">
+                <button className="p-2 hover:bg-gray-100 rounded">
+                  <Mail className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Add display name for better debugging
+GmailInterface.displayName = 'GmailInterface';
 
 
 interface Prospect {
@@ -10,6 +175,21 @@ interface Prospect {
   company: string;
   email?: string;
   location?: string;
+}
+
+interface BackendCandidate {
+  id: string;
+  first_name?: string;
+  full_name?: string;
+  work_email?: string;
+  job_title?: string;
+  job_company_name?: string;
+  job_company_size?: string;
+  job_company_industry?: string;
+  linkedin_url?: string;
+  location_name?: string;
+  skills?: string[];
+  inferred_years_experience?: number;
 }
 
 export default function MainPage() {
@@ -22,40 +202,140 @@ export default function MainPage() {
   const [toField, setToField] = useState('');
   const [subjectField, setSubjectField] = useState('');
   const [bodyField, setBodyField] = useState('');
-  const [outreachType, setOutreachType] = useState<'recruiting' | 'sales' | null>(null);
+  const [outreachType, setOutreachType] = useState<'recruiting' | 'sales' | null>('recruiting');
+  const [campaignId, setCampaignId] = useState<string | null>(null);
 
   const handleGmailSend = async () => {
-    if (!toField.trim()) return;
+    console.log("🚀 handleGmailSend called!"); // ADD THIS LINE
+    
+    if (!toField.trim() || !outreachType) return;
 
     setIsLoading(true);
     
     try {
-      // Mock search based on the "To" field
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('Starting search request...', { toField, outreachType });
       
-      const mockProspects: Prospect[] = outreachType === 'recruiting' ? [
-        { name: 'Alex Chen', title: 'Senior Software Engineer', company: 'TechCorp AI', email: 'alex@techcorp.ai', location: 'San Francisco, CA' },
-        { name: 'Sarah Kim', title: 'Full Stack Developer', company: 'StartupXYZ', email: 'sarah@startupxyz.com', location: 'San Francisco, CA' },
-        { name: 'Marcus Johnson', title: 'Lead Engineer', company: 'InnovateCo', email: 'marcus@innovateco.io', location: 'Palo Alto, CA' },
-        { name: 'Emily Rodriguez', title: 'Senior Developer', company: 'AI Dynamics', email: 'emily@aidynamics.com', location: 'San Francisco, CA' },
-        { name: 'David Park', title: 'Software Engineer', company: 'FutureTech', email: 'david@futuretech.ai', location: 'Mountain View, CA' }
-      ] : [
-        { name: 'Jennifer Walsh', title: 'VP of Engineering', company: 'ScaleAI', email: 'jennifer@scaleai.com', location: 'San Francisco, CA' },
-        { name: 'Michael Torres', title: 'Head of Engineering', company: 'DeepMind Labs', email: 'michael@deepmind.io', location: 'Palo Alto, CA' },
-        { name: 'Lisa Chang', title: 'Engineering Director', company: 'Anthropic', email: 'lisa@anthropic.com', location: 'San Francisco, CA' },
-        { name: 'Robert Kim', title: 'VP Engineering', company: 'OpenAI', email: 'robert@openai.com', location: 'San Francisco, CA' },
-        { name: 'Amanda Foster', title: 'Head of Engineering', company: 'Cohere', email: 'amanda@cohere.ai', location: 'San Francisco, CA' }
-      ];
+      // Call your actual API endpoint
+      const response = await fetch('/api/search/prospects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // TODO: Add back when auth is ready
+          // 'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({
+          toField: toField.trim(),
+          bodyField: bodyField.trim(),
+          outreachType: outreachType
+        })
+      });
 
-      setProspects(mockProspects);
-      setTimeout(() => {
-        setActiveTab('prospects');
-      }, 500);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API call failed: ${response.status} - ${errorData.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      console.log('Search response:', data);
+      
+      // Backend now returns campaignId for polling
+      if (data.campaignId) {
+        setCampaignId(data.campaignId);
+        console.log('Campaign created, starting polling...', data.campaignId);
+        
+        // Start polling for results
+        pollForCampaignResults(data.campaignId);
+      } else {
+        throw new Error('No campaign ID returned from server');
+      }
 
     } catch (error) {
-      console.error('Failed to find prospects:', error);
-    } finally {
+      console.error('Failed to start search:', error);
+      alert(`Failed to start search: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsLoading(false);
+    }
+  };
+
+  const pollForCampaignResults = async (campaignId: string) => {
+    try {
+      console.log('Polling campaign:', campaignId);
+      
+      const response = await fetch(`/api/campaigns/${campaignId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // TODO: Add back when auth is ready
+          // 'Authorization': `Bearer ${userToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get campaign status: ${response.status}`);
+      }
+
+      const campaign = await response.json();
+      console.log('Campaign status:', campaign.status, campaign);
+      
+      if (campaign.status === 'completed') {
+        // Campaign finished successfully
+        console.log('Campaign completed! Processing prospects...');
+        
+        // Convert campaign candidates to frontend prospects
+        const prospects = campaign.candidates || campaign.prospects || [];
+        const convertedProspects = prospects.map((candidate: any) => ({
+          name: candidate.full_name || candidate.first_name || 'Unknown Name',
+          title: candidate.current_title || candidate.job_title || 'Unknown Title',
+          company: candidate.current_company || candidate.job_company_name || 'Unknown Company',
+          email: candidate.email || candidate.work_email,
+          location: candidate.location || candidate.location_name
+        }));
+
+        console.log('Converted prospects:', convertedProspects);
+        setProspects(convertedProspects);
+        setIsLoading(false);
+        
+        // Switch to prospects tab
+        setTimeout(() => {
+          setActiveTab('prospects');
+        }, 500);
+        
+      } else if (campaign.status === 'failed') {
+        // Campaign failed
+        console.error('Campaign failed:', campaign.error);
+        alert(`Search failed: ${campaign.error || 'Unknown error occurred'}`);
+        setIsLoading(false);
+        
+      } else if (campaign.status === 'processing' || campaign.status === 'active' || campaign.status === 'pending') {
+        // Still processing, poll again in 2 seconds
+        console.log('Campaign still processing, polling again in 2s...');
+        setTimeout(() => {
+          pollForCampaignResults(campaignId);
+        }, 2000);
+        
+      } else {
+        // Unknown status, keep polling but with longer interval
+        console.warn('Unknown campaign status:', campaign.status);
+        setTimeout(() => {
+          pollForCampaignResults(campaignId);
+        }, 3000);
+      }
+
+    } catch (error) {
+      console.error('Error polling campaign results:', error);
+      
+      // Retry polling a few times before giving up
+      const retryCount = (window as any).pollRetryCount || 0;
+      if (retryCount < 3) {
+        (window as any).pollRetryCount = retryCount + 1;
+        console.log(`Polling error, retrying... (${retryCount + 1}/3)`);
+        setTimeout(() => {
+          pollForCampaignResults(campaignId);
+        }, 5000);
+      } else {
+        setIsLoading(false);
+        alert('Error getting search results. Please try again.');
+        (window as any).pollRetryCount = 0;
+      }
     }
   };
 
@@ -84,135 +364,7 @@ export default function MainPage() {
     }
   };
 
-  const GmailInterface = () => {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="w-full max-w-3xl">
-          {/* Gmail-style Email Window */}
-          <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
-            {/* Window Header with Recruiting/Sales Toggle */}
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-              <div className="flex items-center space-x-1 text-sm font-medium text-gray-700" style={{ fontFamily: 'Satoshi, sans-serif' }}>
-                <button
-                  onClick={() => setOutreachType('recruiting')}
-                  className={`transition-colors duration-200 ${
-                    outreachType === 'recruiting' ? 'text-black' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  Recruiting
-                </button>
-                <span className="text-gray-400">|</span>
-                <button
-                  onClick={() => setOutreachType('sales')}
-                  className={`transition-colors duration-200 ${
-                    outreachType === 'sales' ? 'text-black' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  Sales
-                </button>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button className="p-1 hover:bg-gray-200 rounded">
-                  <Minus className="h-4 w-4 text-gray-500" />
-                </button>
-                <button className="p-1 hover:bg-gray-200 rounded">
-                  <Square className="h-4 w-4 text-gray-500" />
-                </button>
-                <button className="p-1 hover:bg-gray-200 rounded">
-                  <X className="h-4 w-4 text-gray-500" />
-                </button>
-              </div>
-            </div>
-
-            {/* Email Fields */}
-            <div className="p-4 space-y-2">
-              {/* To Field */}
-              <div className="flex items-center border-b border-gray-200 py-2">
-                <label className="text-sm text-gray-600 w-14 mr-2" style={{ fontFamily: 'Satoshi, sans-serif' }}>
-                  To
-                </label>
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={toField}
-                    onChange={(e) => setToField(e.target.value)}
-                    placeholder="VP of Engineering at AI startups in SF"
-                    className="w-full py-1 text-gray-900 placeholder-gray-400 border-none outline-none text-sm"
-                    style={{ fontFamily: 'Satoshi, sans-serif' }}
-                  />
-                </div>
-                <div className="flex items-center space-x-3 text-sm text-gray-500 ml-2">
-                  <span>Cc</span>
-                  <span>Bcc</span>
-                </div>
-              </div>
-
-              {/* Subject Field */}
-              <div className="flex items-center border-b border-gray-200 py-2">
-                <label className="text-sm text-gray-600 w-14 mr-2" style={{ fontFamily: 'Satoshi, sans-serif' }}>
-                  Subject
-                </label>
-                <input
-                  type="text"
-                  value={subjectField}
-                  onChange={(e) => setSubjectField(e.target.value)}
-                  placeholder="Subject"
-                  className="flex-1 py-1 text-gray-900 placeholder-gray-400 border-none outline-none text-sm"
-                  style={{ fontFamily: 'Satoshi, sans-serif' }}
-                />
-              </div>
-
-              {/* Email Body */}
-              <div className="pt-3">
-                <textarea
-                  value={bodyField}
-                  onChange={(e) => setBodyField(e.target.value)}
-                  placeholder="Compose your message..."
-                  rows={6}
-                  className="w-full py-2 border-none outline-none text-gray-700 text-sm resize-none"
-                  style={{ fontFamily: 'Satoshi, sans-serif' }}
-                />
-              </div>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="px-4 pb-4">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={handleGmailSend}
-                  disabled={!toField.trim() || isLoading}
-                  className={`px-6 py-2 rounded-md font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
-                    toField.trim() && !isLoading
-                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                  style={{ fontFamily: 'Satoshi, sans-serif' }}
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Finding...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      <span>Send</span>
-                    </>
-                  )}
-                </button>
-                
-                <div className="flex items-center space-x-2 text-gray-400">
-                  <button className="p-2 hover:bg-gray-100 rounded">
-                    <Mail className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // GmailInterface has been moved outside and memoized
 
   const ProspectsList = () => {
     if (prospects.length === 0) {
@@ -244,7 +396,7 @@ export default function MainPage() {
           </button>
         </div>
         <div className="space-y-3">
-          {prospects.map((prospect, index) => (
+          {prospects.map((prospect: Prospect, index: number) => (
             <div key={index} className="flex items-center space-x-4 p-4 border border-gray-100 rounded-lg hover:border-gray-200 transition-colors duration-200">
               <input 
                 type="checkbox" 
@@ -359,7 +511,22 @@ export default function MainPage() {
 
         {/* Tab Content */}
         <div>
-          {activeTab === 'compose' ? <GmailInterface /> : <ProspectsList />}
+          {activeTab === 'compose' ? (
+            <GmailInterface
+              toField={toField}
+              setToField={setToField}
+              subjectField={subjectField}
+              setSubjectField={setSubjectField}
+              bodyField={bodyField}
+              setBodyField={setBodyField}
+              outreachType={outreachType}
+              setOutreachType={setOutreachType}
+              isLoading={isLoading}
+              handleGmailSend={handleGmailSend}
+            />
+          ) : (
+            <ProspectsList />
+          )}
         </div>
       </main>
 

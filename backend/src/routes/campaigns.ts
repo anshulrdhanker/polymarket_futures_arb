@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticateUser } from '../middleware/authMiddleware';
 import { campaignCreationLimiter } from '../middleware/rateLimit';
 import campaignController from '../controllers/campaignController';
-import { OpenAIService, ConversationState } from '../services/openaiService';
+import { OpenAIService } from '../services/openaiService';
 import { PDLService, Candidate } from '../services/pdlService';
 import { emailQueue } from '../config/redis';
 
@@ -42,57 +42,44 @@ router.get(
   })
 );
 
-// POST /api/campaigns/:id/chat - Handle conversation messages
+// POST /api/campaigns/:id/analyze - Analyze natural language input and extract structured data
 router.post(
-  '/:id/chat',
+  '/:id/analyze',
   asyncHandler(async (req, res) => {
     const { id: campaignId } = req.params;
-    const { message, conversationState } = req.body;
+    const { input, outreachType } = req.body;
 
     try {
-      // Special case: Initialize conversation (first call with no message)
-      if (!message) {
-        const initialResponse = OpenAIService.initializeConversation();
-        res.json({
-          response: initialResponse.message,
-          conversationState: initialResponse.conversationState,
-          should_search: false,
-          pdlQuery: null
-        });
+      // Validate input
+      if (typeof input !== 'string' || !input.trim()) {
+        res.status(400).json({ error: 'Input must be a non-empty string' });
         return;
       }
 
-      // Validate message for normal conversation
-      if (typeof message !== 'string') {
-        res.status(400).json({ error: 'Message must be a string' });
+      // Validate outreach type
+      if (!['recruiting', 'sales'].includes(outreachType)) {
+        res.status(400).json({ error: 'Invalid outreach type. Must be either "recruiting" or "sales"' });
         return;
       }
 
-      // Normal conversation processing
-      if (!conversationState) {
-        res.status(400).json({ error: 'Conversation state is required for message processing' });
-        return;
-      }
-
-      const response = await OpenAIService.processScriptedConversation(
-        message,
-        conversationState
+      // Process the input using the new single-input model
+      const conversationData = await OpenAIService.parseNaturalLanguageToConversationData(
+        input,
+        outreachType as 'recruiting' | 'sales'
       );
 
       res.json({
-        response: response.message,
-        conversationState: response.conversationState,
-        should_search: response.conversationState.isComplete
+        success: true,
+        data: conversationData,
+        should_search: true // Always return true since we're using single-input model
       });
-      return;
 
     } catch (error) {
-      console.error('Error in chat endpoint:', error);
+      console.error('Error analyzing input:', error);
       res.status(500).json({ 
-        error: 'Failed to process conversation',
-        message: 'Sorry, I encountered an error. Could you please try again?'
+        error: 'Failed to process input',
+        message: 'Sorry, I encountered an error while processing your input. Please try again.'
       });
-      return;
     }
   })
 );

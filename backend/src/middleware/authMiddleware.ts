@@ -1,22 +1,30 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User, UserProfile } from '../models/User';
+import { User } from '../models/User';
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: UserProfile & { id: string };
-    }
-  }
+// Extend Express Request type to include user
+export interface AuthenticatedRequest<P = {}, ResBody = any, ReqBody = any, ReqQuery = any> extends Request<P, ResBody, ReqBody, ReqQuery> {
+  user?: {
+    id: string;
+    email: string;
+    name?: string;
+    [key: string]: any; // Allow additional properties
+  };
+}
+
+// This is a type guard to check if the request is authenticated
+export function isAuthenticated(req: Request): req is AuthenticatedRequest {
+  return (req as AuthenticatedRequest).user !== undefined;
 }
 
 type JwtPayload = {
   userId?: string;
   id?: string;
-  [key: string]: any;
+  email?: string;
+  role?: string;
 };
 
-export const authenticateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const authenticateUser = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const authHeader = req.headers.authorization || '';
     
