@@ -56,18 +56,12 @@ export interface CampaignInfo {
 
 export interface ConversationData {
   outreach_type: 'recruiting' | 'sales';
-  user_title?: string;
-  user_company?: string;
-  user_mission?: string;
   tone?: string;
-  // Recruiting specific
   role_title?: string;
   skills?: string;
   experience_level?: string;
-  // Sales specific
   buyer_title?: string;
   pain_point?: string;
-  // Shared
   company_size?: string;
   industry?: string;
   location?: string;
@@ -183,7 +177,7 @@ Only include fields that are explicitly mentioned in the input.`;
       const responseText = await this.callOpenAI(messages, {
         model: "gpt-4",
         temperature: 0.2,
-        max_tokens: 500
+        max_tokens: 500,
       });
 
       return this.parseJSONResponse<PDLQuery>(responseText, 'role analysis');
@@ -316,24 +310,25 @@ Return only valid JSON, no explanations.`;
   ): Promise<ConversationData> {
     const prompt = `Extract the following information from this job search query: "${naturalLanguageInput}"
 
-Extract the following fields as JSON. If a field is not mentioned, set it to an empty string.
+Return a FLAT JSON object (no nested objects) with these fields. Set unused fields to empty string (""):
 
-For recruiting:
-- role_title: The job title or role being searched for
-- skills: Comma-separated list of required skills or technologies
-- experience_level: Seniority level (e.g., Junior, Mid, Senior, Lead, Principal, Director, VP, C-level)
-- company_size: Company size (e.g., startup, small, mid-sized, large, enterprise)
-- industry: Industry or sector (e.g., fintech, healthcare, SaaS)
-- location: Geographic location or remote status
+{
+  "role_title": "job title being searched for (for recruiting)",
+  "skills": "comma-separated skills (for recruiting)",
+  "experience_level": "seniority level (e.g., Junior, Mid, Senior, VP, etc.)",
+  "buyer_title": "target buyer title (for sales)",
+  "pain_point": "main problem to solve (for sales)",
+  "company_size": "company size (e.g., Startup, 1-50, 1000+)",
+  "industry": "industry/sector (e.g., Fintech, SaaS, Healthcare)",
+  "location": "geographic location (e.g., New York, Remote, North America)"
+}
 
-For sales:
-- buyer_title: Job title of the target buyer
-- pain_point: The main problem or need being addressed
-- company_size: Target company size
-- industry: Target industry
-- location: Geographic location or remote status
-
-Return ONLY a valid JSON object with these fields.`;
+IMPORTANT RULES:
+1. Return ONLY a flat JSON object with the exact fields shown above
+2. Do NOT include any nested objects or arrays
+3. Do NOT include any explanations or additional text
+4. Set any unused fields to empty string ("")
+5. Keep the field names EXACTLY as shown above`;
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
@@ -368,9 +363,6 @@ Return ONLY a valid JSON object with these fields.`;
       // Create base conversation data structure with better defaults
       const conversationData: ConversationData = {
         outreach_type: outreachType,
-        user_title: 'User',
-        user_company: 'Company',
-        user_mission: 'Finding the right people',
         ...extractedData
       };
 
@@ -380,10 +372,7 @@ Return ONLY a valid JSON object with these fields.`;
       
       // Return minimal valid response on error with better defaults
       return {
-        outreach_type: outreachType,
-        user_title: 'User',
-        user_company: 'Company',
-        user_mission: 'Finding the right people'
+        outreach_type: outreachType
       };
     }
   }

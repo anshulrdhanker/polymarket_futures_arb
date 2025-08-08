@@ -1,3 +1,5 @@
+console.log('🔥 [WORKER] campaignProcessor.ts file loaded!');
+
 import { Worker } from 'bullmq';
 import { campaignQueue } from '../config/redis';
 import { CampaignJobData } from '../services/queueTypes';
@@ -85,6 +87,18 @@ async function processCampaign(job: { data: CampaignJobData }): Promise<void> {
 const campaignWorker = new Worker('campaign-processing', processCampaign, {
   connection: campaignQueue.opts.connection,
   concurrency: 1, // Process one campaign at a time
+});
+
+// Test Redis connection and log worker status
+console.log('🔥 [WORKER] Testing Redis connection...');
+campaignQueue.getJobs(['waiting', 'active']).then(jobs => {
+  console.log('🔥 [WORKER] Found jobs in queue:', jobs.length);
+}).catch(err => {
+  console.error('🔥 [WORKER] Redis connection test failed:', err);
+});
+
+campaignWorker.on('ready', () => {
+  console.log('🔥 [WORKER] Worker is ready and connected to Redis!');
 });
 
 // Event listeners with proper TypeScript types

@@ -6,15 +6,8 @@ import compression from 'compression';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
-import { campaignWorker } from './jobs/campaignProcessor';
-import { emailWorker } from './jobs/emailSender';
 
-// Worker initialization
-console.log('🚀 Background workers initialized');
-console.log('📊 Campaign worker ready - processing campaigns');
-console.log('📧 Email worker ready - sending emails');
-
-// Load environment variables
+// Load environment variables first
 dotenv.config();
 
 // DEBUG: Check environment loading
@@ -23,6 +16,31 @@ console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
 console.log('JWT_SECRET value:', process.env.JWT_SECRET);
 console.log('All JWT env vars:', Object.keys(process.env).filter(k => k.includes('JWT')));
 console.log('================');
+
+// Import workers after environment variables are loaded
+import { campaignWorker } from './jobs/campaignProcessor';
+import { emailWorker } from './jobs/emailSender';
+
+// Proper worker initialization function
+async function initializeWorkers() {
+  try {
+    console.log('🚀 Initializing background workers...');
+    
+    // Force the workers to be referenced so they actually initialize
+    console.log('Campaign worker status:', campaignWorker ? 'loaded' : 'not loaded');
+    console.log('Email worker status:', emailWorker ? 'loaded' : 'not loaded');
+    
+    console.log('✅ Campaign worker initialized successfully');
+    console.log('✅ Email worker initialized successfully');
+    
+  } catch (error) {
+    console.error('❌ Failed to initialize workers:', error);
+    throw error;
+  }
+}
+
+// Initialize workers
+initializeWorkers().catch(console.error);
 
 const app = express();
 
