@@ -50,6 +50,41 @@ export interface Candidate {
 }
 
 
+// Location normalization mapping for common location formats to PDL canonical fields
+const LOCATION_NORMALIZATION: Record<string, {city?: string, region?: string, country?: string, metro?: string}> = {
+  // US Cities
+  'new york': { city: 'New York', region: 'New York', country: 'United States', metro: 'New York City Metro Area' },
+  'nyc': { city: 'New York', region: 'New York', country: 'United States', metro: 'New York City Metro Area' },
+  'san francisco': { city: 'San Francisco', region: 'California', country: 'United States', metro: 'San Francisco Bay Area' },
+  'sf': { city: 'San Francisco', region: 'California', country: 'United States', metro: 'San Francisco Bay Area' },
+  'bay area': { region: 'California', country: 'United States', metro: 'San Francisco Bay Area' },
+  'los angeles': { city: 'Los Angeles', region: 'California', country: 'United States', metro: 'Greater Los Angeles Area' },
+  'la': { city: 'Los Angeles', region: 'California', country: 'United States', metro: 'Greater Los Angeles Area' },
+  'seattle': { city: 'Seattle', region: 'Washington', country: 'United States', metro: 'Greater Seattle Area' },
+  'boston': { city: 'Boston', region: 'Massachusetts', country: 'United States', metro: 'Greater Boston Area' },
+  'chicago': { city: 'Chicago', region: 'Illinois', country: 'United States', metro: 'Greater Chicago Area' },
+  'austin': { city: 'Austin', region: 'Texas', country: 'United States', metro: 'Greater Austin Area' },
+  'denver': { city: 'Denver', region: 'Colorado', country: 'United States', metro: 'Denver Metro Area' },
+  
+  // US States
+  'california': { region: 'California', country: 'United States' },
+  'texas': { region: 'Texas', country: 'United States' },
+  'florida': { region: 'Florida', country: 'United States' },
+  'washington': { region: 'Washington', country: 'United States' },
+  
+  // Countries
+  'usa': { country: 'United States' },
+  'united states': { country: 'United States' },
+  'canada': { country: 'Canada' },
+  'uk': { country: 'United Kingdom' },
+  'united kingdom': { country: 'United Kingdom' },
+  'germany': { country: 'Germany' },
+  'france': { country: 'France' },
+  'australia': { country: 'Australia' },
+  'india': { country: 'India' },
+  'singapore': { country: 'Singapore' }
+};
+
 // PDL canonical value mappings
 const EXPERIENCE_LEVEL_MAPPING: Record<string, string[]> = {
  'entry': ['entry', 'training'],
@@ -67,8 +102,7 @@ const EXPERIENCE_LEVEL_MAPPING: Record<string, string[]> = {
 
 
 const COMPANY_SIZE_MAPPING: Record<string, string[]> = {
- 'startup': ['1-10', '11-50'],
- 'small': ['11-50', '51-200'],
+ 'startup': ['1-10', '11-200'],
  'mid-sized': ['201-500', '501-1000'],
  'medium': ['201-500', '501-1000'],
  'large': ['1001-5000', '5001-10000'],
@@ -83,64 +117,114 @@ const INDUSTRY_MAPPINGS: Record<string, string[]> = {
  'fintech': ['financial services', 'banking', 'insurance', 'investment banking'],
  'healthtech': ['hospital & health care', 'medical devices', 'pharmaceuticals'],
  'edtech': ['education management', 'e-learning', 'higher education'],
- 'e-commerce': ['retail', 'internet', 'consumer goods'],
- 'ai': ['computer software', 'artificial intelligence', 'machine learning'],
- 'crypto': ['financial services', 'blockchain', 'cryptocurrency']
 };
 
-
-// Enhanced job title expansion for graduated matching
+// Enhanced job title expansions for broader matching
 const JOB_TITLE_EXPANSIONS: Record<string, Array<{title: string, boost: number}>> = {
- 'software engineer': [
-   { title: 'software engineer', boost: 10 },
-   { title: 'software developer', boost: 9 },
-   { title: 'developer', boost: 8 },
-   { title: 'programmer', boost: 7 },
-   { title: 'engineer', boost: 5 },
-   { title: 'full stack developer', boost: 6 }
- ],
- 'frontend developer': [
-   { title: 'frontend developer', boost: 10 },
-   { title: 'front-end developer', boost: 10 },
-   { title: 'ui developer', boost: 9 },
-   { title: 'react developer', boost: 9 },
-   { title: 'javascript developer', boost: 8 },
-   { title: 'web developer', boost: 7 },
-   { title: 'software engineer', boost: 5 }
- ],
- 'backend developer': [
-   { title: 'backend developer', boost: 10 },
-   { title: 'back-end developer', boost: 10 },
-   { title: 'server developer', boost: 9 },
-   { title: 'api developer', boost: 9 },
-   { title: 'software engineer', boost: 5 }
- ],
- 'data scientist': [
-   { title: 'data scientist', boost: 10 },
-   { title: 'machine learning engineer', boost: 9 },
-   { title: 'data analyst', boost: 8 },
-   { title: 'ai researcher', boost: 7 },
-   { title: 'data engineer', boost: 6 }
- ],
- 'product manager': [
-   { title: 'product manager', boost: 10 },
-   { title: 'senior product manager', boost: 9 },
-   { title: 'product owner', boost: 8 },
-   { title: 'product lead', boost: 7 }
- ],
- 'marketing manager': [
-   { title: 'marketing manager', boost: 10 },
-   { title: 'digital marketing manager', boost: 9 },
-   { title: 'growth manager', boost: 8 },
-   { title: 'marketing lead', boost: 7 },
-   { title: 'marketing director', boost: 6 }
- ],
- 'sales manager': [
-   { title: 'sales manager', boost: 10 },
-   { title: 'account manager', boost: 9 },
-   { title: 'business development manager', boost: 8 },
-   { title: 'sales director', boost: 7 }
- ]
+  // VP Sales variations
+  'vp sales': [
+    { title: 'vice president of sales', boost: 1.0 },
+    { title: 'vp of sales', boost: 1.0 },
+    { title: 'vice president sales', boost: 0.9 },
+    { title: 'sales vp', boost: 0.9 },
+    { title: 'head of sales', boost: 0.85 },
+    { title: 'director of sales', boost: 0.8 },
+    { title: 'sales director', boost: 0.8 },
+    { title: 'chief revenue officer', boost: 0.75 },
+    { title: 'cro', boost: 0.7 },
+    { title: 'chief sales officer', boost: 0.7 },
+    { title: 'cso', boost: 0.65 },
+    { title: 'sales leader', boost: 0.6 },
+    { title: 'revenue leader', boost: 0.6 },
+    { title: 'sales executive', boost: 0.5 },
+    { title: 'business development executive', boost: 0.4 }
+  ],
+  'vp of sales': [
+    { title: 'vice president of sales', boost: 1.0 },
+    { title: 'vp of sales', boost: 1.0 },
+    { title: 'vice president sales', boost: 0.9 },
+    { title: 'sales vp', boost: 0.9 },
+    { title: 'head of sales', boost: 0.85 },
+    { title: 'director of sales', boost: 0.8 },
+    { title: 'sales director', boost: 0.8 },
+    { title: 'chief revenue officer', boost: 0.75 },
+    { title: 'cro', boost: 0.7 },
+    { title: 'chief sales officer', boost: 0.7 },
+    { title: 'cso', boost: 0.65 },
+    { title: 'sales leader', boost: 0.6 },
+    { title: 'revenue leader', boost: 0.6 },
+    { title: 'sales executive', boost: 0.5 },
+    { title: 'business development executive', boost: 0.4 }
+  ],
+  // VP Engineering variations
+  'vp engineering': [
+    { title: 'vp of engineering', boost: 1.0 },
+    { title: 'vice president of engineering', boost: 1.0 },
+    { title: 'engineering vp', boost: 0.9 },
+    { title: 'head of engineering', boost: 0.9 },
+    { title: 'director of engineering', boost: 0.8 },
+    { title: 'engineering director', boost: 0.8 },
+    { title: 'cto', boost: 0.7 }
+  ],
+  'vp of engineering': [
+    { title: 'vp of engineering', boost: 1.0 },
+    { title: 'vice president of engineering', boost: 1.0 },
+    { title: 'engineering vp', boost: 0.9 },
+    { title: 'head of engineering', boost: 0.9 },
+    { title: 'director of engineering', boost: 0.8 },
+    { title: 'engineering director', boost: 0.8 },
+    { title: 'cto', boost: 0.7 }
+  ],
+  'software engineer': [
+    { title: 'software engineer', boost: 10 },
+    { title: 'software developer', boost: 9 },
+    { title: 'developer', boost: 8 },
+    { title: 'programmer', boost: 7 },
+    { title: 'engineer', boost: 5 },
+    { title: 'full stack developer', boost: 6 }
+  ],
+  'frontend developer': [
+    { title: 'frontend developer', boost: 10 },
+    { title: 'front-end developer', boost: 10 },
+    { title: 'ui developer', boost: 9 },
+    { title: 'react developer', boost: 9 },
+    { title: 'javascript developer', boost: 8 },
+    { title: 'web developer', boost: 7 },
+    { title: 'software engineer', boost: 5 }
+  ],
+  'backend developer': [
+    { title: 'backend developer', boost: 10 },
+    { title: 'back-end developer', boost: 10 },
+    { title: 'server developer', boost: 9 },
+    { title: 'api developer', boost: 9 },
+    { title: 'software engineer', boost: 5 }
+  ],
+  'data scientist': [
+    { title: 'data scientist', boost: 10 },
+    { title: 'machine learning engineer', boost: 9 },
+    { title: 'data analyst', boost: 8 },
+    { title: 'ai researcher', boost: 7 },
+    { title: 'data engineer', boost: 6 }
+  ],
+  'product manager': [
+    { title: 'product manager', boost: 10 },
+    { title: 'senior product manager', boost: 9 },
+    { title: 'product owner', boost: 8 },
+    { title: 'product lead', boost: 7 }
+  ],
+  'marketing manager': [
+    { title: 'marketing manager', boost: 10 },
+    { title: 'digital marketing manager', boost: 9 },
+    { title: 'growth manager', boost: 8 },
+    { title: 'marketing lead', boost: 7 },
+    { title: 'marketing director', boost: 6 }
+  ],
+  'sales manager': [
+    { title: 'sales manager', boost: 10 },
+    { title: 'account manager', boost: 9 },
+    { title: 'business development manager', boost: 8 },
+    { title: 'sales director', boost: 7 }
+  ]
 };
 
 
@@ -173,7 +257,7 @@ export class PDLService {
   */
  static async searchFromConversation(
    conversationData: ConversationData,
-   maxCandidates: number = 3
+   maxCandidates: number = 1
  ): Promise<Candidate[]> {
    try {
      console.log('Converting conversation data to smart single PDL query:', conversationData);
@@ -251,17 +335,20 @@ export class PDLService {
  private static validateAndTrimQuery(query: any, maxClauses: number = 100): any {
    // Deep clone to avoid mutating original
    const validatedQuery = JSON.parse(JSON.stringify(query));
-  
-   if (validatedQuery.bool?.should && validatedQuery.bool.should.length > maxClauses) {
-     console.warn(`Trimming should clauses from ${validatedQuery.bool.should.length} to ${maxClauses} to prevent oversized request`);
-     validatedQuery.bool.should = validatedQuery.bool.should.slice(0, maxClauses);
+   
+   // Handle both query.bool and direct bool structures
+   const boolNode = validatedQuery.query?.bool ?? validatedQuery.bool;
+   
+   if (boolNode?.should && boolNode.should.length > maxClauses) {
+     console.warn(`Trimming should clauses from ${boolNode.should.length} to ${maxClauses} to prevent oversized request`);
+     boolNode.should = boolNode.should.slice(0, maxClauses);
    }
-  
-   if (validatedQuery.bool?.must && validatedQuery.bool.must.length > maxClauses) {
-     console.warn(`Trimming must clauses from ${validatedQuery.bool.must.length} to ${maxClauses} to prevent oversized request`);
-     validatedQuery.bool.must = validatedQuery.bool.must.slice(0, maxClauses);
+   
+   if (boolNode?.must && boolNode.must.length > maxClauses) {
+     console.warn(`Trimming must clauses from ${boolNode.must.length} to ${maxClauses} to prevent oversized request`);
+     boolNode.must = boolNode.must.slice(0, maxClauses);
    }
-  
+   
    return validatedQuery;
  }
 
@@ -284,10 +371,14 @@ export class PDLService {
    // GRADUATED JOB TITLE MATCHING (recruiting vs sales)
    if (data.outreach_type === 'recruiting' && data.role_title) {
      const titleClauses = this.buildGraduatedJobTitleQuery(data.role_title, 'recruiting');
-     shouldClauses.push(...titleClauses);
+     if (titleClauses.length > 0) {
+       shouldClauses.push(...titleClauses);
+     }
    } else if (data.outreach_type === 'sales' && data.buyer_title) {
      const titleClauses = this.buildGraduatedJobTitleQuery(data.buyer_title, 'sales');
-     shouldClauses.push(...titleClauses);
+     if (titleClauses.length > 0) {
+       shouldClauses.push(...titleClauses);
+     }
    }
 
 
@@ -337,11 +428,14 @@ export class PDLService {
    shouldClauses.push(...this.buildFallbackClauses(data));
 
 
-   // Build and return the query clauses directly
+   // Return the query in the correct PDL format
   return {
-    must: mustClauses,
-    should: shouldClauses,
-    minimum_should_match: 1  // Only need to match ONE criteria
+    query: {
+      bool: {
+        must: mustClauses,
+        should: shouldClauses  // PDL doesn't support minimum_should_match
+      }
+    }
   };
  }
 
@@ -488,61 +582,153 @@ export class PDLService {
   * Build graduated industry query with broad fallbacks
   */
  private static buildGraduatedIndustryQuery(industryString: string): any[] {
+   if (!industryString) return [];
+   
    const cleanIndustry = industryString.toLowerCase().trim();
    const industryClauses: any[] = [];
-  
+   const seenIndustries = new Set<string>();
+   
    // Check for mapped industries
-  const mappedIndustries = INDUSTRY_MAPPINGS[cleanIndustry];
-  if (mappedIndustries) {
-    mappedIndustries.forEach(industry => {
-      industryClauses.push({
-        match: {
-          job_company_industry: industry
-        }
-      });
-    });
-  }
-
-  // Direct match
-  industryClauses.push({
-    match: {
-      job_company_industry: cleanIndustry
-    }
-  });
-
-
+   const mappedIndustries = INDUSTRY_MAPPINGS[cleanIndustry] || [];
+   
+   // Add mapped industries, avoiding duplicates
+   mappedIndustries.forEach(industry => {
+     const normalizedIndustry = industry.toLowerCase().trim();
+     if (normalizedIndustry && !seenIndustries.has(normalizedIndustry) && normalizedIndustry !== 'ai') {
+       seenIndustries.add(normalizedIndustry);
+       industryClauses.push({
+         match: {
+           job_company_industry: normalizedIndustry
+         }
+       });
+     }
+   });
+   
+   // Add direct match if not already included
+   if (cleanIndustry && cleanIndustry !== 'ai' && !seenIndustries.has(cleanIndustry)) {
+     industryClauses.push({
+       match: {
+         job_company_industry: cleanIndustry
+       }
+     });
+   }
+   
+   // Add broader industry terms if we have specific tech industries
+   if (cleanIndustry.includes('tech') || cleanIndustry.includes('software') || 
+       cleanIndustry.includes('saas') || cleanIndustry.includes('ai') || 
+       cleanIndustry.includes('artificial intelligence')) {
+     
+     const broaderTerms = [
+       'technology', 'information technology', 'it services', 'computer software',
+       'internet', 'saas', 'cloud computing', 'artificial intelligence',
+       'machine learning', 'data science', 'big data', 'analytics'
+     ];
+     
+     broaderTerms.forEach(term => {
+       if (!seenIndustries.has(term)) {
+         seenIndustries.add(term);
+         industryClauses.push({
+           match: {
+             job_company_industry: term
+           }
+         });
+       }
+     });
+   }
+   
    return industryClauses;
  }
 
 
  /**
   * Build graduated location query
+  * Returns an array of match clauses for location_metro and location_name
+  * to be used in a bool.should query
+  */
+ /**
+  * Normalize location string to PDL canonical fields
+  */
+ private static normalizeLocation(locationString: string): {
+   city?: string,
+   region?: string,
+   country?: string,
+   metro?: string
+ } {
+   if (!locationString) return {};
+   
+   const cleanLocation = locationString.toLowerCase().trim();
+   
+   // Check for exact matches in our normalization mapping
+   if (LOCATION_NORMALIZATION[cleanLocation]) {
+     return { ...LOCATION_NORMALIZATION[cleanLocation] };
+   }
+   
+   // Check for partial matches (e.g., "new york, ny" -> { city: "New York", region: "New York" })
+   for (const [key, value] of Object.entries(LOCATION_NORMALIZATION)) {
+     if (cleanLocation.includes(key)) {
+       return { ...value };
+     }
+   }
+   
+   // Default case - return as city for exact matching
+   return { city: locationString.trim() };
+ }
+
+ /**
+  * Build graduated location query using normalized location fields
   */
  private static buildGraduatedLocationQuery(locationString: string): any[] {
-   const cleanLocation = locationString.toLowerCase().trim();
+   if (!locationString) return [];
+   
+   const normalized = this.normalizeLocation(locationString);
    const locationClauses: any[] = [];
-
-   // City/region match
-   locationClauses.push({
-     match: {
-       location_name: cleanLocation
-     }
-   });
-
-   // Region/state match
-   locationClauses.push({
-     match: {
-       location_region: cleanLocation
-     }
-   });
-
-   // Country match
-   locationClauses.push({
-     match: {
-       location_country: cleanLocation
-     }
-   });
-
+   
+   // Exact metro area match (highest priority)
+   if (normalized.metro) {
+     locationClauses.push({
+       match: { 'location_metro': normalized.metro }
+     });
+   }
+   
+   // City + region match (high priority)
+   if (normalized.city && normalized.region) {
+     locationClauses.push({
+       bool: {
+         must: [
+           { match: { 'location_locality': normalized.city } },
+           { match: { 'location_region': normalized.region } }
+         ]
+       }
+     });
+   }
+   
+   // City only match (medium priority)
+   if (normalized.city) {
+     locationClauses.push({
+       match: { 'location_locality': normalized.city }
+     });
+   }
+   
+   // Region/country match (lower priority)
+   if (normalized.region) {
+     locationClauses.push({
+       match: { 'location_region': normalized.region }
+     });
+   }
+   
+   if (normalized.country) {
+     locationClauses.push({
+       match: { 'location_country': normalized.country }
+     });
+   }
+   
+   // Fallback to original location string if no matches found
+   if (locationClauses.length === 0) {
+     locationClauses.push({
+       match: { 'location_name': locationString }
+     });
+   }
+   
    return locationClauses;
  }
 
@@ -572,17 +758,32 @@ export class PDLService {
   */
  private static buildFallbackClauses(data: ConversationData): any[] {
    const fallbackClauses: any[] = [];
+   const seenIndustries = new Set<string>();
 
-   // Industry-based fallbacks
+   // Industry-based fallbacks (deduplicated)
    if (data.industry) {
-     const mappedIndustries = INDUSTRY_MAPPINGS[data.industry.toLowerCase()];
-     if (mappedIndustries) {
-       mappedIndustries.forEach(industry => {
+     const cleanIndustry = data.industry.toLowerCase().trim();
+     const mappedIndustries = INDUSTRY_MAPPINGS[cleanIndustry] || [];
+     
+     // Add mapped industries, avoiding duplicates and 'ai' literal
+     mappedIndustries.forEach(industry => {
+       const normalizedIndustry = industry.toLowerCase().trim();
+       if (normalizedIndustry && normalizedIndustry !== 'ai' && !seenIndustries.has(normalizedIndustry)) {
+         seenIndustries.add(normalizedIndustry);
          fallbackClauses.push({
            match: {
-             job_company_industry: industry
+             job_company_industry: normalizedIndustry
            }
          });
+       }
+     });
+     
+     // Add direct industry match if not already included
+     if (cleanIndustry && cleanIndustry !== 'ai' && !seenIndustries.has(cleanIndustry)) {
+       fallbackClauses.push({
+         match: {
+           job_company_industry: cleanIndustry
+         }
        });
      }
    }
@@ -645,15 +846,13 @@ export class PDLService {
    }
 
    try {
-     // Build the request body with query clauses properly nested under query.bool
-     const requestBody = {
-       query: {
-         bool: query
-       },
-       size: Math.min(maxCandidates, 100), // Cap at 100 results max
-       data_include: 'first_name,full_name,work_email,job_title,job_company_name,job_company_size,job_company_industry,linkedin_url,location_name,skills,inferred_years_experience',
-       titlecase: true
-     };
+      // The query already contains the full structure, just add the remaining fields
+      const requestBody = {
+        ...query, // Spread the query which already has the correct structure
+        size: Math.min(maxCandidates, 100), // Cap at 100 results max
+        data_include: 'first_name,full_name,work_email,job_title,job_company_name,job_company_size,job_company_industry,linkedin_url,location_name,skills,inferred_years_experience',
+        titlecase: true
+      };
      
      // Log the final request body for debugging
      console.log('Final PDL API request body:', JSON.stringify(requestBody, null, 2));
@@ -700,7 +899,11 @@ export class PDLService {
    response: PDLResponse,
    conversationData: ConversationData
  ): Candidate[] {
+   // Debug: Log raw PDL response data
+   console.log("Raw PDL data for debugging:", JSON.stringify(response.data, null, 2));
+   
    if (!response.data || response.data.length === 0) {
+     console.log("No data in PDL response");
      return [];
    }
 
@@ -837,9 +1040,21 @@ export class PDLService {
 
  // Utility methods
  private static getJobTitleExpansions(title: string): Array<{title: string, boost: number}> {
+   if (!title) return [];
+   
+   // First try exact match
    const cleanTitle = title.toLowerCase().trim();
-   const expansions = JOB_TITLE_EXPANSIONS[cleanTitle];
-   return expansions || [{ title: title, boost: 10 }];
+   const exactMatch = JOB_TITLE_EXPANSIONS[cleanTitle];
+   if (exactMatch) return exactMatch;
+   
+   // Then try normalized key (remove 'of', punctuation, and normalize whitespace)
+   const normalizedKey = cleanTitle
+     .replace(/\bof\b/g, '')   // strip 'of'
+     .replace(/[^\w\s]/g, '')  // remove punctuation
+     .replace(/\s+/g, ' ')     // normalize whitespace
+     .trim();
+     
+   return JOB_TITLE_EXPANSIONS[normalizedKey] || [{ title: title, boost: 10 }];
  }
 
 
@@ -871,11 +1086,13 @@ export class PDLService {
  static async testConnection(): Promise<boolean> {
    try {
      const testQuery = {
-       bool: {
-         must: [
-           { match: { job_title: "engineer" } },
-           { exists: { field: "work_email" } }
-         ]
+       query: {
+         bool: {
+           must: [
+             { match: { job_title: "engineer" } },
+             { exists: { field: "work_email" } }
+           ]
+         }
        }
      };
 

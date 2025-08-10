@@ -14,25 +14,6 @@ const openai = new OpenAI({
 });
 
 // Types for our recruiting use cases
-export interface RoleInput {
-  description: string;
-  company?: string;
-  location?: string;
-  remote?: boolean;
-  experienceLevel?: string;
-  additionalRequirements?: string;
-}
-
-export interface PDLQuery {
-  job_title?: string[];
-  skills?: string[];
-  location?: string[];
-  experience_level?: string[];
-  industry?: string[];
-  company_size?: string[];
-  current_company?: string[];
-}
-
 export interface CandidateInfo {
   full_name: string;
   current_title?: string;
@@ -138,52 +119,6 @@ export class OpenAIService {
     } catch (error) {
       console.error(`Failed to parse OpenAI JSON response for ${context}:`, responseText);
       throw new Error(`Invalid JSON response from OpenAI for ${context}`);
-    }
-  }
-
-  /**
-   * Analyze role requirements and convert to PDL search parameters
-   */
-  static async analyzeRole(roleInput: RoleInput): Promise<PDLQuery> {
-    try {
-      const prompt = `Convert the following role requirements into structured search parameters for a candidate search:
-
-${JSON.stringify(roleInput, null, 2)}
-
-Return a JSON object with the following structure:
-{
-  "job_title": ["array of job titles"],
-  "skills": ["array of required skills"],
-  "location": ["array of locations"],
-  "experience_level": ["array of experience levels"],
-  "industry": ["array of industries"],
-  "company_size": ["array of company sizes"],
-  "current_company": ["array of current companies"]
-}
-
-Only include fields that are explicitly mentioned in the input.`;
-
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-        {
-          role: "system",
-          content: "You convert job role requirements into structured search parameters. Return only valid JSON."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ];
-
-      const responseText = await this.callOpenAI(messages, {
-        model: "gpt-4",
-        temperature: 0.2,
-        max_tokens: 500,
-      });
-
-      return this.parseJSONResponse<PDLQuery>(responseText, 'role analysis');
-    } catch (error) {
-      console.error('Error analyzing role:', error);
-      return {};
     }
   }
 
@@ -320,7 +255,7 @@ Return a FLAT JSON object (no nested objects) with these fields. Set unused fiel
   "pain_point": "main problem to solve (for sales)",
   "company_size": "company size (e.g., Startup, 1-50, 1000+)",
   "industry": "industry/sector (e.g., Fintech, SaaS, Healthcare)",
-  "location": "geographic location (e.g., New York, Remote, North America)"
+  "location": "full geographic location name - expand abbreviations (e.g., SF → San Francisco, NYC → New York City, LA → Los Angeles, Remote, North America)"
 }
 
 IMPORTANT RULES:
@@ -328,7 +263,8 @@ IMPORTANT RULES:
 2. Do NOT include any nested objects or arrays
 3. Do NOT include any explanations or additional text
 4. Set any unused fields to empty string ("")
-5. Keep the field names EXACTLY as shown above`;
+5. Keep the field names EXACTLY as shown above
+6. For locations: Always expand common abbreviations like SF to San Francisco, NYC to New York City, LA to Los Angeles, etc.`;
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
