@@ -159,6 +159,8 @@ class CampaignController {
    */
   async getCampaignStatus(req: Request, res: Response): Promise<void> {
     try {
+      // Prevent caching of this endpoint
+      res.set('Cache-Control', 'no-store');
       const { id: campaignId } = req.params;
       // Mock userId for development and bypass authentication
       const userId = 'mock-user-id';

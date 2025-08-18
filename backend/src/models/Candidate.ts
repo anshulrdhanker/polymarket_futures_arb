@@ -3,18 +3,18 @@ import { supabase } from '../config/database';
 export interface CreateCandidateData {
   campaign_id: string;
   full_name: string;
-  email: string;
-  phone?: string;
-  current_company?: string;
-  current_title?: string;
-  location?: string;
-  linkedin_url?: string;
-  github_url?: string;
-  skills?: string[];
-  experience_years?: number;
+  email?: string | null;
+  phone?: string | null;
+  current_company?: string | null;
+  current_title?: string | null;
+  location?: string | null;
+  linkedin_url?: string | null;
+  github_url?: string | null;
+  skills?: string[] | null;
+  experience_years?: number | null;
   education?: any;
   pdl_profile_data?: any;
-  selected_skill?: string;
+  selected_skill?: string | null;
   match_score?: number;
 }
 
@@ -64,7 +64,7 @@ export class Candidate {
         .insert([{
           campaign_id: candidateData.campaign_id,
           full_name: candidateData.full_name,
-          email: candidateData.email,
+          email: candidateData.email ?? null,
           phone: candidateData.phone || null,
           current_company: candidateData.current_company || null,
           current_title: candidateData.current_title || null,
@@ -104,7 +104,7 @@ export class Candidate {
       const candidatesToInsert = candidatesData.map(candidateData => ({
         campaign_id: candidateData.campaign_id,
         full_name: candidateData.full_name,
-        email: candidateData.email,
+        email: candidateData.email ?? null,
         phone: candidateData.phone || null,
         current_company: candidateData.current_company || null,
         current_title: candidateData.current_title || null,

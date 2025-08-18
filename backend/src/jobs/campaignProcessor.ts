@@ -7,79 +7,105 @@ import { OpenAIService } from '../services/openaiService';
 import { PDLService, Candidate as PDLCandidate } from '../services/pdlService';
 import { QueueService } from '../services/queueService';
 import { Candidate } from '../models/Candidate';
+import { Campaign } from '../models/Campaign';
 
 /**
  * Process a campaign job
  */
 async function processCampaign(job: { data: CampaignJobData }): Promise<void> {
-  console.log("🔥 [WORKER] Campaign processor started for:", job.data.campaignId);
-  
   const { campaignId, userId, conversationData } = job.data;
-  
+
+  console.log(`[Worker] Starting campaign ${campaignId} for user ${userId}`);
+  await Campaign.updateStatus(campaignId, 'searching');
+  console.log(`[Worker] Status updated to 'searching' for campaign ${campaignId}`);
+
   try {
-    console.log("🔥 [WORKER] Step 1: Starting campaign processing");
+    console.log(`[Worker] Searching for candidates for campaign ${campaignId}`);
+    const pdlResults = await PDLService.searchFromConversation(conversationData, 3);
     
-    // Step 1: Search for candidates
-    console.log("🔥 [WORKER] Step 2: Searching for candidates with PDL");
-    const pdlResults = await PDLService.searchFromConversation(conversationData, 3); // Test with 3
+    console.log(`[Worker] Found ${pdlResults?.length || 0} candidates for campaign ${campaignId}`);
     
-    console.log("🔥 [WORKER] Step 3: Found candidates:", pdlResults.length);
-    
+    // Handle case where no candidates are found
     if (!pdlResults || pdlResults.length === 0) {
-      console.warn("🔥 [WORKER] No candidates found");
+      console.log(`[Worker] No candidates found for campaign ${campaignId}, marking as completed`);
+      await Campaign.updateStatus(campaignId, 'completed');
+      console.log(`[Worker] Campaign ${campaignId} marked as completed with 0 candidates`);
       return;
     }
 
-    // Step 2: Save candidates to database
-    console.log(`[Campaign ${campaignId}] Saving ${pdlResults.length} candidates to database`);
-    const candidateData = pdlResults.map((prospect: any) => {
-      // Type assertion for PDL response data
-      const pdlData = prospect as PDLCandidate & {
-        first_name?: string;
-        last_name?: string;
-        inferred_years_experience?: number;
-      };
-
-      // Extract name - use full_name if available, otherwise construct from first/last
+    // Process and save candidates
+    console.log(`[Worker] Processing ${pdlResults.length} candidates for campaign ${campaignId}`);
+    
+    // First, filter out candidates without work emails
+    const validCandidates = pdlResults.filter(pdlData => 
+      pdlData.work_email && pdlData.work_email.includes('@')
+    );
+    
+    console.log(`[Worker] Found ${validCandidates.length} candidates with valid emails out of ${pdlResults.length} total`);
+    
+    const candidatesToSave = validCandidates.map((pdlData: PDLCandidate & {
+      first_name?: string;
+      last_name?: string;
+      job_company_name?: string;
+      job_title?: string;
+      location_name?: string;
+      linkedin_url?: string;
+      skills?: string[];
+      inferred_years_experience?: number;
+    }) => {
       const fullName = pdlData.full_name || 
         [pdlData.first_name, pdlData.last_name].filter(Boolean).join(' ').trim() || 
         'Unknown';
       
-      // Extract experience - use inferred_years_experience from PDL
-      const experienceYears = pdlData.inferred_years_experience;
-      
-      // Extract skills - use skills array directly from PDL
-      const skills = Array.isArray(pdlData.skills) 
-        ? pdlData.skills.filter(Boolean)
-        : [];
-      
       return {
         campaign_id: campaignId,
         full_name: fullName,
-        email: pdlData.work_email || '',
+        email: pdlData.work_email || '', // This is guaranteed to exist due to filter above
         current_company: pdlData.job_company_name || '',
         current_title: pdlData.job_title || '',
         location: pdlData.location_name || '',
         linkedin_url: pdlData.linkedin_url || '',
-        skills,
-        experience_years: experienceYears,
+        skills: Array.isArray(pdlData.skills) ? pdlData.skills.filter(Boolean) : [],
+        experience_years: pdlData.inferred_years_experience,
         pdl_profile_data: pdlData,
         status: 'found' as const,
         match_score: 1.0
       };
     });
 
-    const savedCandidates = await Candidate.createBatch(candidateData);
-    console.log(`[Campaign ${campaignId}] Successfully saved ${savedCandidates.length} candidates`);
+    // Save valid candidates to database
+    const savedCandidates = await Candidate.createBatch(candidatesToSave);
+    console.log(`[Worker] Successfully saved ${savedCandidates.length} candidates for campaign ${campaignId}`);
     
-    // Step 3: Queue email generation with saved candidates
-    console.log(`[Campaign ${campaignId}] Queueing ${savedCandidates.length} emails`);
-    await QueueService.queueEmailGeneration(campaignId, userId, savedCandidates, conversationData);
-    
-    console.log("🔥 [WORKER] Step 4: Campaign processing completed successfully");
+    // Update campaign with total found count (only those with valid emails)
+    if (savedCandidates.length > 0) {
+      await Campaign.incrementTotalFound(campaignId, savedCandidates.length);
+      console.log(`[Worker] Updated total found count to ${savedCandidates.length} for campaign ${campaignId}`);
+      
+      // Queue email generation for valid candidates
+      console.log(`[Worker] Queueing ${savedCandidates.length} emails for campaign ${campaignId}`);
+      await QueueService.queueEmailGeneration(campaignId, userId, savedCandidates, conversationData);
+    } else {
+      console.log(`[Worker] No candidates with valid emails to queue emails for campaign ${campaignId}`);
+    }
+
+    // Mark campaign as completed
+    await Campaign.updateStatus(campaignId, 'completed');
+    console.log(`[Worker] Campaign ${campaignId} marked as completed with ${savedCandidates.length} candidates`);
+
   } catch (error) {
-    console.error("🔥 [WORKER] Error processing campaign:", error);
-    throw error; // Let BullMQ handle retries
+    console.error(`[Worker] Error processing campaign ${campaignId}:`, error);
+    
+    // Mark campaign as failed
+    try {
+      await Campaign.updateStatus(campaignId, 'failed');
+      console.error(`[Worker] Marked campaign ${campaignId} as failed due to error`);
+    } catch (statusError) {
+      console.error(`[Worker] Failed to update status to 'failed' for campaign ${campaignId}:`, statusError);
+    }
+    
+    // Re-throw to let BullMQ handle retries
+    throw error;
   }
 }
 

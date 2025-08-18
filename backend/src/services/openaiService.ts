@@ -35,18 +35,7 @@ export interface CampaignInfo {
   is_remote: string;
 }
 
-export interface ConversationData {
-  outreach_type: 'recruiting' | 'sales';
-  tone?: string;
-  role_title?: string;
-  skills?: string;
-  experience_level?: string;
-  buyer_title?: string;
-  pain_point?: string;
-  company_size?: string;
-  industry?: string;
-  location?: string;
-}
+import { ConversationData } from '../types/conversation';
 
 export class OpenAIService {
   // Script templates for email composition
@@ -243,28 +232,33 @@ Return only valid JSON, no explanations.`;
     naturalLanguageInput: string,
     outreachType: 'recruiting' | 'sales'
   ): Promise<ConversationData> {
-    const prompt = `Extract the following information from this job search query: "${naturalLanguageInput}"
+    const prompt = `From this query: "${naturalLanguageInput}"
 
-Return a FLAT JSON object (no nested objects) with these fields. Set unused fields to empty string (""):
+Return ONLY a flat JSON object with these exact fields (unused = ""):
 
 {
-  "role_title": "job title being searched for (for recruiting)",
-  "skills": "comma-separated skills (for recruiting)",
-  "experience_level": "seniority level (e.g., Junior, Mid, Senior, VP, etc.)",
-  "buyer_title": "target buyer title (for sales)",
-  "pain_point": "main problem to solve (for sales)",
-  "company_size": "company size (e.g., Startup, 1-50, 1000+)",
-  "industry": "industry/sector (e.g., Fintech, SaaS, Healthcare)",
-  "location": "full geographic location name - expand abbreviations (e.g., SF → San Francisco, NYC → New York City, LA → Los Angeles, Remote, North America)"
+  "role_title": "",
+  "normalized_title": "",
+  "title_variants": [],
+  "role": "",
+  "seniority_levels": [],
+  "skills": "",
+  "experience_level": "",
+  "buyer_title": "",
+  "pain_point": "",
+  "company_size": "",
+  "industry": "",
+  "location": ""
 }
 
-IMPORTANT RULES:
-1. Return ONLY a flat JSON object with the exact fields shown above
-2. Do NOT include any nested objects or arrays
-3. Do NOT include any explanations or additional text
-4. Set any unused fields to empty string ("")
-5. Keep the field names EXACTLY as shown above
-6. For locations: Always expand common abbreviations like SF to San Francisco, NYC to New York City, LA to Los Angeles, etc.`;
+Rules:
+- "normalized_title": Clean, human title (e.g., "VP of Engineering", "Head of Product").
+- "title_variants": 3-8 realistic title spellings/synonyms for the same function/seniority (no junior titles if query implies VP+). Example for VP of Engineering: ["VP Engineering","VP, Engineering","Vice President of Engineering","Head of Engineering","Engineering Director"].
+- "role": One word function bucket if obvious: one of ["engineering","product","marketing","sales","human resources","data","design","finance","operations","it","legal"]. Else "".
+- "seniority_levels": Map to People Data Labs levels subset: any of ["training","entry","manager","senior","director","vp","cxo"]. Example: VP -> ["vp","cxo"]; Director -> ["director"].
+- Expand location abbrevs (SF→San Francisco, NYC→New York City, LA→Los Angeles).
+- Keep city/region/country inside "location" as natural text; do not nest objects.
+- Return valid JSON only. No explanations.`;
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
@@ -284,9 +278,13 @@ IMPORTANT RULES:
         max_tokens: 500
       });
 
-      // Parse the JSON response
+      // Parse the JSON response with all fields from ConversationData
       const extractedData = this.parseJSONResponse<{
         role_title?: string;
+        normalized_title?: string;
+        title_variants?: string[];
+        role?: string;
+        seniority_levels?: string[];
         skills?: string;
         experience_level?: string;
         buyer_title?: string;
@@ -296,10 +294,48 @@ IMPORTANT RULES:
         location?: string;
       }>(responseText, 'natural language parsing');
 
-      // Create base conversation data structure with better defaults
+      // Coerce & fallback
+      const normalized_title = extractedData.normalized_title?.trim() || extractedData.role_title?.trim() || "";
+      let title_variants = Array.isArray((extractedData as any).title_variants)
+        ? ((extractedData as any).title_variants as string[]).map(v => String(v).trim()).filter(Boolean)
+        : [];
+
+      if (!title_variants.length && normalized_title) {
+        // Simple auto-variants as a fallback
+        const base = normalized_title;
+        const noOf = base.replace(/\bof\b/gi, '').replace(/\s+/g, ' ').trim();
+        title_variants = Array.from(new Set([
+          base,
+          noOf,
+          base.replace(/Vice President/gi, 'VP'),
+          base.replace(/\bVP\b/gi, 'Vice President'),
+          base.replace(/Head of/gi, 'Head,'),
+          base.replace(/Head,/gi, 'Head of'),
+        ])).filter(Boolean);
+      }
+
+      // Coerce seniority_levels
+      let seniority_levels = Array.isArray((extractedData as any).seniority_levels)
+        ? ((extractedData as any).seniority_levels as string[]).map(s => s.toLowerCase().trim())
+        : [];
+
+      const allowedLevels = new Set(['training','entry','manager','senior','director','vp','cxo']);
+      seniority_levels = seniority_levels.filter(l => allowedLevels.has(l));
+
+      // If nothing given but title clearly implies, infer a minimal set
+      if (!seniority_levels.length && normalized_title) {
+        const t = normalized_title.toLowerCase();
+        if (/\b(vp|vice president|chief|cto|cpo|cmo|cfo|coo)\b/.test(t)) seniority_levels = ['vp','cxo'];
+        else if (/\bdirector|head\b/.test(t)) seniority_levels = ['director'];
+        else if (/\bsenior\b/.test(t)) seniority_levels = ['senior'];
+      }
+
       const conversationData: ConversationData = {
         outreach_type: outreachType,
-        ...extractedData
+        ...extractedData,
+        normalized_title,
+        title_variants,
+        seniority_levels,
       };
 
       return conversationData;

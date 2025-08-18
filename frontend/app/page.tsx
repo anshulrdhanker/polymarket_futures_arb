@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, memo, JSX } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { Mail, Send, X, Minus, Square, Users } from 'lucide-react';
 
 // Props interface for GmailInterface
@@ -15,53 +15,117 @@ interface GmailInterfaceProps {
   setOutreachType: (value: 'recruiting' | 'sales') => void;
   isLoading: boolean;
   typing: boolean;
-  typedSubject?: string;   // NEW: For typing animation
-  typedBody?: string;      // NEW: For typing animation
+  typedSubject?: string;
+  typedBody?: string;
   handleGmailSend: () => void;
   onEnterStart: () => void;
+  placeholderValues: Record<string, string>;
+  setPlaceholderValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
 
-// Turns "{name}" → editable <span> that updates state on blur
-const renderWithEditablePlaceholders = (
-  text: string,
-  onUpdate: (newText: string) => void
-) => {
-  const parts: (string | JSX.Element)[] = [];
-  const regex = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
-  let lastIndex = 0;
-  let match;
+// --- Placeholder chips (inline) ----------------------------------------
+const TOKEN_RE = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+const NON_EDITABLE = new Set(['name']); // read-only tokens for now
 
-  while ((match = regex.exec(text)) !== null) {
+const PlaceholderChip: React.FC<{
+  tokenKey: string;
+  editable: boolean;
+  value?: string;
+  onCommit: (key: string, value: string) => void;
+}> = ({ tokenKey, editable, value, onCommit }) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [val, setVal] = React.useState(value ?? '');
+
+  React.useEffect(() => setVal(value ?? ''), [value]);
+
+  const commit = React.useCallback(() => {
+    onCommit(tokenKey, val.trim());
+    setIsEditing(false);
+  }, [tokenKey, val, onCommit]);
+
+  const revert = React.useCallback(() => {
+    setIsEditing(false);
+    setVal(value ?? '');
+  }, [value]);
+
+  if (!editable) {
+    return (
+      <span
+        className="px-1 rounded-sm border text-gray-700 bg-gray-100 border-gray-300 cursor-default"
+        title="Auto-fills at send"
+      >
+        {value?.trim() || tokenKey}
+      </span>
+    );
+  }
+
+  if (isEditing) {
+    return (
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            revert();
+          }
+        }}
+        className="px-1 rounded-sm border border-amber-300 text-amber-900 bg-white outline-none"
+        placeholder={tokenKey}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="px-1 bg-amber-50 border border-amber-300 rounded-sm text-amber-900"
+      onClick={() => setIsEditing(true)}
+    >
+      {value?.trim() || tokenKey}
+    </button>
+  );
+};
+
+function renderWithEditablePlaceholders(
+  text: string,
+  values: Record<string, string>,
+  onTokenEdit: (key: string, value: string) => void
+) {
+  const parts: (string | React.ReactNode)[] = [];
+  let lastIndex = 0;
+  TOKEN_RE.lastIndex = 0; // Reset regex state
+  let match: RegExpExecArray | null;
+
+  while ((match = TOKEN_RE.exec(text)) !== null) {
     const before = text.slice(lastIndex, match.index);
     if (before) parts.push(before);
 
     const key = match[1];
-    parts.push(
-      <span
-        key={`${key}-${match.index}`}
-        contentEditable
-        suppressContentEditableWarning
-        className="px-1 bg-amber-50 border border-amber-300 rounded-sm text-amber-900"
-        onBlur={(e) => {
-          const value = e.currentTarget.textContent || '';
-          const updated = text.replace(
-            new RegExp(`\\{${key}\\}`, 'g'),
-            value || `{${key}}`
-          );
-          onUpdate(updated);
-        }}
-      >
-        {`{${key}}`}
-      </span>
-    );
-    lastIndex = regex.lastIndex;
-  }
+    const editable = !NON_EDITABLE.has(key);
 
+    parts.push(
+      <PlaceholderChip
+        key={`${key}-${match.index}`}
+        tokenKey={key}
+        editable={editable}
+        value={values[key]}
+        onCommit={onTokenEdit}
+      />
+    );
+    lastIndex = TOKEN_RE.lastIndex;
+  }
+  
   const after = text.slice(lastIndex);
   if (after) parts.push(after);
 
   return parts;
-};
+}
 
 // External GmailInterface component with React.memo
 const GmailInterface = memo(({
@@ -79,7 +143,13 @@ const GmailInterface = memo(({
   typedBody = '',
   handleGmailSend,
   onEnterStart,
+  placeholderValues,
+  setPlaceholderValues,
 }: GmailInterfaceProps) => {
+  const setPlaceholderValue = React.useCallback((key: string, value: string) => {
+    setPlaceholderValues(prev => ({ ...prev, [key]: value }));
+  }, [setPlaceholderValues]);
+
   // Compute display values based on typing state
   const subjectForUI = typing ? (typedSubject ?? subjectField) : subjectField;
   const displayBody = typing ? (typedBody ?? bodyField) : bodyField;
@@ -101,59 +171,7 @@ const GmailInterface = memo(({
     setSubjectField(e.target.value);
   }, [setSubjectField]);
 
-  const handleBodyFieldChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setBodyField(e.target.value);
-  }, [setBodyField]);
 
-  // --- helper to find placeholders like {name}, {skills}, etc.
-  const getPlaceholders = (text: string) => {
-    const re = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
-    const set = new Set<string>();
-    let m;
-    while ((m = re.exec(text)) !== null) set.add(m[1]);
-    return Array.from(set);
-  };
-
-  const PlaceholderChips: React.FC<{
-    text: string;
-    onApply: (values: Record<string, string>) => void;
-  }> = ({ text, onApply }) => {
-    const keys = getPlaceholders(text);
-    const [values, setValues] = React.useState<Record<string, string>>({});
-  
-    if (keys.length === 0) return null;
-  
-    return (
-      <div className="mt-3">
-        <div className="text-xs text-gray-500 mb-2">Placeholders</div>
-        <div className="flex flex-wrap gap-2">
-          {keys.map((k) => (
-            <label
-              key={k}
-              className="flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 rounded-full px-2 py-1"
-            >
-              <span className="font-medium text-amber-800">{`{${k}}`}</span>
-              <input
-                className="bg-transparent outline-none text-amber-900 placeholder:text-amber-400"
-                placeholder={`Enter ${k}`}
-                value={values[k] ?? ''}
-                onChange={(e) =>
-                  setValues((prev) => ({ ...prev, [k]: e.target.value }))
-                }
-              />
-            </label>
-          ))}
-          <button
-            type="button"
-            onClick={() => onApply(values)}
-            className="text-xs px-3 py-1 rounded-full border border-gray-300 hover:bg-gray-50"
-          >
-            Apply to body
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="flex items-center justify-center p-4">
@@ -230,36 +248,26 @@ const GmailInterface = memo(({
             </div>
 
             <div className="pt-3">
-              <div className={`${typing ? 'opacity-70 pointer-events-none' : ''}`}>
-                <div
-                  className="w-full py-2 text-gray-700 text-sm min-h-[150px] whitespace-pre-wrap"
-                  style={{ fontFamily: 'Satoshi, sans-serif' }}
-                >
-                  {renderWithEditablePlaceholders(displayBody, setBodyField)}
-                </div>
-                <PlaceholderChips
-                  text={displayBody}
-                  onApply={(vals) => {
-                    let next = bodyField;
-                    for (const [k, v] of Object.entries(vals)) {
-                      const re = new RegExp(`\\{${k}\\}`, 'g');
-                      next = next.replace(re, v || `{${k}}`);
-                    }
-                    setBodyField(next);
-                  }}
-                />
+            <div className={`${typing ? 'opacity-70 pointer-events-none' : ''}`}>
+              <div
+                className="w-full py-2 text-gray-700 text-sm min-h-[150px] whitespace-pre-wrap"
+                style={{ fontFamily: 'Satoshi, sans-serif' }}
+              >
+                {renderWithEditablePlaceholders(displayBody, placeholderValues, setPlaceholderValue)}
               </div>
             </div>
+          </div>
           </div>
 
           <div className="px-4 pb-4">
             <div className="flex items-center justify-between">
+              <div className="flex-1"></div>
               <button
                 onClick={onEnterStart}
                 disabled={!toField.trim() || isLoading}
                 className={`px-6 py-2 rounded-md font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
                   toField.trim() && !isLoading
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                    ? 'bg-gray-800 text-white hover:bg-gray-900 shadow-sm'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
                 style={{ fontFamily: 'Satoshi, sans-serif' }}
@@ -329,6 +337,7 @@ export default function MainPage() {
   const [bodyField, setBodyField] = useState('');
   const [outreachType, setOutreachType] = useState<'recruiting' | 'sales' | null>('recruiting');
   const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
 
   // --- Typing UX state ---
   const [typing, setTyping] = useState(false);
@@ -393,8 +402,13 @@ Thanks,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _unusedVars = { typing, typedSubject, typedBody };
 
+  const compileBody = (tpl: string, vals: Record<string, string>) => {
+    TOKEN_RE.lastIndex = 0;
+    return tpl.replace(TOKEN_RE, (_m, k) => (vals[k]?.trim() ? vals[k].trim() : `{${k}}`));
+  };
+
   const handleGmailSend = async () => {
-    console.log("🚀 handleGmailSend called!"); // ADD THIS LINE
+    console.log("🚀 handleGmailSend called!");
     
     if (!toField.trim() || !outreachType) return;
 
@@ -402,6 +416,9 @@ Thanks,
     
     try {
       console.log('Starting search request...', { toField, outreachType });
+      
+      // Compile the body with current placeholder values
+      const compiledBody = compileBody(bodyField.trim(), placeholderValues);
       
       // Call your actual API endpoint
       const response = await fetch('/api/search/prospects', {
@@ -413,7 +430,7 @@ Thanks,
         },
         body: JSON.stringify({
           toField: toField.trim(),
-          bodyField: bodyField.trim(),
+          bodyField: compiledBody,
           outreachType: outreachType
         })
       });
@@ -659,7 +676,7 @@ Thanks,
             className="text-4xl font-medium text-black leading-tight tracking-tight mb-3"
             style={{ fontFamily: 'Satoshi, sans-serif', letterSpacing: '-0.05em' }}
           >
-            <span>Your People Reach Machine</span>
+            <span></span>
           </h1>
         </div>
       </section>
@@ -715,30 +732,32 @@ Thanks,
               typedBody={typedBody}
               handleGmailSend={handleGmailSend}
               onEnterStart={startSearch}
+              placeholderValues={placeholderValues}
+              setPlaceholderValues={setPlaceholderValues}
             />
           )}
           
           {activeTab === 'prospects' && <ProspectsList />}
         </div>
-        
-        <style jsx global>{`
-          @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap');
-          
-          * {
-            box-sizing: border-box;
-          }
-          
-          html {
-            scroll-behavior: smooth;
-          }
-          
-          body {
-            font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-          }
-      `}</style>
       </main>
+      
+      <style jsx global>{`
+        @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap');
+        
+        * {
+          box-sizing: border-box;
+        }
+        
+        html {
+          scroll-behavior: smooth;
+        }
+        
+        body {
+          font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+      `}</style>
     </div>
   );
 }
