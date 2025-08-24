@@ -9,6 +9,15 @@ import { NonRetriableError } from '../utils/errors';
 import { checkEmailRateLimit } from '../middleware/rateLimiter';
 
 /**
+ * Compile a template string with provided values
+ */
+function compileTemplate(template: string, values: Record<string, string>): string {
+  return template.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_, key) => {
+    return values[key] !== undefined ? values[key] : `{${key}}`;
+  });
+}
+
+/**
  * Process an email sending job
  */
 async function processEmail(job: { data: EmailJobData }): Promise<void> {
@@ -37,20 +46,34 @@ async function processEmail(job: { data: EmailJobData }): Promise<void> {
       throw new NonRetriableError('User has not connected Gmail account or tokens are invalid');
     }
     
-    // Step 4: Generate email content using OpenAI
-    console.log(`[Email ${candidateId}] Generating email content`);
-    const template = "Hi {name}, I came across your experience and thought you'd be a great fit for a {role_title} role here at {recruiter_company}. We're passionate about {recruiter_mission}, and I think your experience aligns perfectly with what we're looking for. Would you be open to a quick chat about this opportunity? Best, {recruiter_name}";
+    // Step 4: Generate email content using templates
+    console.log(`[Email ${candidateId}] Generating email content using templates`);
     
-    const emailContent = await OpenAIService.generateRecruitingEmail(
-      candidate,
-      campaignData,
-      template
-    );
+    // Get templates from campaign data or use defaults
+    const bodyTemplate = campaignData.bodyTemplate || 
+      "Hi {name}, I came across your experience and thought you'd be a great fit for a {role_title} role here at {recruiter_company}. We're passionate about {recruiter_mission}, and I think your experience aligns perfectly with what we're looking for. Would you be open to a quick chat about this opportunity? Best, {recruiter_name}";
     
-    // Validate email content
-    if (!emailContent?.body || !emailContent?.subject) {
-      throw new NonRetriableError('Generated email content is invalid - missing subject or body');
-    }
+    const subjectTemplate = campaignData.subjectTemplate || "Quick chat about {role_title} at {recruiter_company}?";
+    
+    // Merge campaign placeholders with candidate-specific fields
+    const personalized = {
+      ...(campaignData.placeholders || {}),
+      name: candidate.first_name || candidate.full_name?.split(" ")[0] || "there",
+      skills: candidate.skills?.join(", ") || "",
+      role_title: campaignData.role_title || "",
+      recruiter_company: campaignData.user_company || "",
+      recruiter_mission: campaignData.user_mission || "",
+      recruiter_name: campaignData.user_title || ""
+    };
+    
+    // Compile templates with personalized values
+    const subject = compileTemplate(subjectTemplate, personalized);
+    const body = compileTemplate(bodyTemplate, personalized);
+    
+    const emailContent = {
+      subject,
+      body
+    };
     
     console.log(`[Email ${candidateId}] Generated email - Subject: ${emailContent.subject}`);
     

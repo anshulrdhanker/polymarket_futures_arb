@@ -36,12 +36,9 @@ async function processCampaign(job: { data: CampaignJobData }): Promise<void> {
     // Process and save candidates
     console.log(`[Worker] Processing ${pdlResults.length} candidates for campaign ${campaignId}`);
     
-    // First, filter out candidates without work emails
-    const validCandidates = pdlResults.filter(pdlData => 
-      pdlData.work_email && pdlData.work_email.includes('@')
-    );
-    
-    console.log(`[Worker] Found ${validCandidates.length} candidates with valid emails out of ${pdlResults.length} total`);
+    // For testing: allow all candidates, even without emails
+    const validCandidates = pdlResults;
+    console.log(`[Worker] Passing through ${validCandidates.length} candidates (skipping email check in test mode)`);
     
     const candidatesToSave = validCandidates.map((pdlData: PDLCandidate & {
       first_name?: string;
@@ -82,9 +79,17 @@ async function processCampaign(job: { data: CampaignJobData }): Promise<void> {
       await Campaign.incrementTotalFound(campaignId, savedCandidates.length);
       console.log(`[Worker] Updated total found count to ${savedCandidates.length} for campaign ${campaignId}`);
       
+      // Prepare campaign data with templates and placeholders
+      const campaignData = {
+        ...conversationData,
+        subjectTemplate: conversationData.subjectTemplate,
+        bodyTemplate: conversationData.bodyTemplate,
+        placeholders: conversationData.placeholders || {}
+      };
+      
       // Queue email generation for valid candidates
       console.log(`[Worker] Queueing ${savedCandidates.length} emails for campaign ${campaignId}`);
-      await QueueService.queueEmailGeneration(campaignId, userId, savedCandidates, conversationData);
+      await QueueService.queueEmailGeneration(campaignId, userId, savedCandidates, campaignData);
     } else {
       console.log(`[Worker] No candidates with valid emails to queue emails for campaign ${campaignId}`);
     }

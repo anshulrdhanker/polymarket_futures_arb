@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, memo } from 'react';
-import { Mail, Send, X, Minus, Square, Users } from 'lucide-react';
+import { Mail, Send, X, Minus, Square, Users, CornerDownLeft } from 'lucide-react';
 
 // Props interface for GmailInterface
 interface GmailInterfaceProps {
@@ -146,6 +146,7 @@ const GmailInterface = memo(({
   placeholderValues,
   setPlaceholderValues,
 }: GmailInterfaceProps) => {
+  const toInputRef = React.useRef<HTMLInputElement>(null);
   const setPlaceholderValue = React.useCallback((key: string, value: string) => {
     setPlaceholderValues(prev => ({ ...prev, [key]: value }));
   }, [setPlaceholderValues]);
@@ -176,7 +177,7 @@ const GmailInterface = memo(({
   return (
     <div className="flex items-center justify-center p-4">
       <div className="w-full max-w-3xl">
-        <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col">
           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
             <div className="flex items-center space-x-1 text-sm font-medium text-gray-700" style={{ fontFamily: 'Satoshi, sans-serif' }}>
               <button
@@ -210,23 +211,45 @@ const GmailInterface = memo(({
             </div>
           </div>
 
-          <div className="p-4 space-y-2">
-            <div className="flex items-center border-b border-gray-200 py-2">
-              <label className="text-sm text-gray-600 w-14 mr-2" style={{ fontFamily: 'Satoshi, sans-serif' }}>
-                To
-              </label>
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={toField}
-                  onChange={handleToFieldChange}
-                  onKeyDown={handleToKeyDown}
-                  placeholder="VP of Engineering at AI startups in SF"
-                  className="w-full py-1 text-gray-900 placeholder-gray-400 border-none outline-none text-sm"
-                  style={{ fontFamily: 'Satoshi, sans-serif' }}
-                />
+          <div className="flex flex-col flex-1 p-4 space-y-2">
+            <div className="flex items-center border-b border-gray-200 py-2 rounded-md">
+              <label htmlFor="to-input" className="w-12 text-sm text-gray-500">To:</label>
+              <input
+                id="to-input"
+                ref={toInputRef}
+                type="text"
+                value={toField}
+                onChange={handleToFieldChange}
+                onKeyDown={handleToKeyDown}
+                placeholder="Enter job title, company, or keywords"
+                className="flex-1 px-2 py-1 text-gray-900 placeholder-gray-400
+                         border border-gray-200 bg-gray-50 rounded-sm sm:text-sm
+                         hover:border-gray-300 focus:outline-none focus:ring-2
+                         focus:ring-gray-300 focus:border-gray-400 transition-colors"
+                disabled={isLoading}
+                aria-describedby="to-input-hint"
+              />
+              <div id="to-input-hint" className="sr-only">
+                Type a job title, company, or keywords to search for prospects
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-500 ml-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!toField.trim() || isLoading) return;
+                    onEnterStart();
+                  }}
+                  disabled={!toField.trim() || isLoading}
+                  title={toField.trim() ? 'Press Enter or click to continue' : "Type who you're looking for"}
+                  className={`p-1.5 rounded-md border transition-all ${
+                    toField.trim() && !isLoading
+                      ? 'border-gray-300 hover:bg-gray-100'
+                      : 'border-gray-200 opacity-50 cursor-not-allowed'
+                  }`}
+                  aria-label="Proceed (Enter)"
+                >
+                  <CornerDownLeft className="h-4 w-4" />
+                </button>
                 <span>Cc</span>
                 <span>Bcc</span>
               </div>
@@ -248,18 +271,25 @@ const GmailInterface = memo(({
             </div>
 
             <div className="pt-3">
-            <div className={`${typing ? 'opacity-70 pointer-events-none' : ''}`}>
-              <div
-                className="w-full py-2 text-gray-700 text-sm min-h-[150px] whitespace-pre-wrap"
-                style={{ fontFamily: 'Satoshi, sans-serif' }}
-              >
-                {renderWithEditablePlaceholders(displayBody, placeholderValues, setPlaceholderValue)}
+              <div className={`${typing ? 'opacity-70 pointer-events-none' : ''}`}>
+                <div
+                  className="w-full py-2 text-gray-700 text-sm min-h-[150px] whitespace-pre-wrap"
+                  style={{ fontFamily: 'Satoshi, sans-serif' }}
+                >
+                  {renderWithEditablePlaceholders(displayBody, placeholderValues, setPlaceholderValue)}
+                </div>
               </div>
             </div>
           </div>
           </div>
-
           <div className="px-4 pb-4">
+            {toField.trim() && !isLoading && (
+              <div className="text-xs text-gray-500 mt-1 pl-14 select-none mb-2">
+                Press <span className="font-medium text-gray-700">Enter</span> or click 
+                <CornerDownLeft className="inline-block h-3.5 w-3.5 mx-1 align-text-bottom" />
+                to continue
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex-1"></div>
               <button
@@ -291,10 +321,37 @@ const GmailInterface = memo(({
                 </button>
               </div>
             </div>
+
+            {/* Single footer with search button */}
+            <div className="px-4 pb-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={onEnterStart}
+                  disabled={!toField.trim() || isLoading}
+                  className={`px-6 py-2 rounded-md font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
+                    toField.trim() && !isLoading
+                      ? 'bg-gray-800 text-white hover:bg-gray-900 shadow-sm'
+                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  }`}
+                  style={{ fontFamily: 'Satoshi, sans-serif' }}
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Searching prospects...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      <span>Search</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
   );
 });
 
@@ -499,10 +556,8 @@ Thanks,
         setProspects(convertedProspects);
         setIsLoading(false);
         
-        // Switch to prospects tab
-        setTimeout(() => {
-          setActiveTab('prospects');
-        }, 500);
+        // Log that prospects are ready and user can switch tabs
+        console.log(`Prospects ready (${convertedProspects.length} found), user can switch tabs when ready`);
         
       } else if (campaign.status === 'failed') {
         // Campaign failed

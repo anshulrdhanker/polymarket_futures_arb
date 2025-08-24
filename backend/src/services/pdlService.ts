@@ -296,14 +296,16 @@ export class PDLService {
       // Add normalized title if available
       if (normalizedTitle) {
         titleClauses.push({ match_phrase: { job_title: normalizedTitle } });
+        titleClauses.push({ match: { job_title: normalizedTitle } });
       }
       
       // Add title variants if available
       if (Array.isArray(data.title_variants) && data.title_variants.length > 0) {
-        data.title_variants.forEach(variant => {
+        data.title_variants.forEach((variant: string) => {
           const cleanVariant = variant?.trim();
           if (cleanVariant) {
             titleClauses.push({ match_phrase: { job_title: cleanVariant } });
+            titleClauses.push({ match: { job_title: cleanVariant } });
           }
         });
       }
@@ -311,6 +313,7 @@ export class PDLService {
       // Fall back to original role_title if no other titles were added
       if (titleClauses.length === 0 && titleText) {
         titleClauses.push({ match_phrase: { job_title: titleText } });
+        titleClauses.push({ match: { job_title: titleText } });
       }
       
       // Only add the title query if we have any title clauses
@@ -332,8 +335,8 @@ export class PDLService {
     if (data.experience_level) {
       const levels = EXPERIENCE_LEVEL_MAPPING[data.experience_level.toLowerCase()];
       if (levels?.length) filter.push({ terms: { job_title_levels: levels } });
-    } else if (titleText) {
-      const lower = titleText.toLowerCase();
+    } else if (normalizedTitle || titleText) {
+      const lower = (normalizedTitle || titleText)!.toLowerCase();
       // if title implies leadership, require senior bands
       if (/(vp|chief|cto|director|head)/.test(lower)) {
         filter.push({ terms: { job_title_levels: ['director','vp','cxo','manager'] } });

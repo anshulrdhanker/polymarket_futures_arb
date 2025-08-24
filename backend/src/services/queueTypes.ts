@@ -33,6 +33,11 @@ export interface ConversationData {
   industry?: string;
   location?: string;
   
+  // Template and placeholders
+  subjectTemplate?: string;
+  bodyTemplate?: string;
+  placeholders?: Record<string, string>;
+  
   // Additional metadata
   additional_variables?: Record<string, any>;
 }
