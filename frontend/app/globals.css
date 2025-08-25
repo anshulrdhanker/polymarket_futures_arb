@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root, html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 :root {
   --background: #fdfcfa;
   --foreground: #171717;
@@ -42,4 +48,13 @@
 
 .animate-bounce {
   animation: bounce 1s infinite;
+}
+
+/* Style for placeholders */
+.placeholder-italic::placeholder {
+  font-style: italic;
+}
+
+.placeholder-italic:not(:placeholder-shown) {
+  font-style: normal;
 }

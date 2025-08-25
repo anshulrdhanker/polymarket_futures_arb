@@ -29,7 +29,17 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-full bg-[#fdfcfa]">{children}</body>
+      <body 
+        className="min-h-screen w-full"
+        style={{
+          backgroundImage: `url(https://images.unsplash.com/photo-1658853148703-e037de399735?w=1600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MjYyfHxjbG91ZCUyMHNreSUyMGJhY2tncm91bmR8ZW58MHx8MHx8fDA%3D)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+        }}
+      >
+        {children}
+      </body>
     </html>
   );
 }

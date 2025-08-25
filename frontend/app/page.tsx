@@ -17,7 +17,6 @@ interface GmailInterfaceProps {
   typing: boolean;
   typedSubject?: string;
   typedBody?: string;
-  handleGmailSend: () => void;
   onEnterStart: () => void;
   placeholderValues: Record<string, string>;
   setPlaceholderValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
@@ -138,10 +137,9 @@ const GmailInterface = memo(({
   outreachType,
   setOutreachType,
   isLoading,
-  typing = false,
-  typedSubject = '',
-  typedBody = '',
-  handleGmailSend,
+  typing,
+  typedSubject,
+  typedBody,
   onEnterStart,
   placeholderValues,
   setPlaceholderValues,
@@ -175,39 +173,43 @@ const GmailInterface = memo(({
 
 
   return (
-    <div className="flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl">
+    <div className="w-full flex flex-col items-center pb-4 px-4 pt-0">
+      <div className="w-full max-w-3xl relative z-10">
         <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col">
-          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-            <div className="flex items-center space-x-1 text-sm font-medium text-gray-700" style={{ fontFamily: 'Satoshi, sans-serif' }}>
-              <button
-                onClick={() => setOutreachType('recruiting')}
-                className={`transition-colors duration-200 ${
-                  outreachType === 'recruiting' ? 'text-black' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Recruiting
-              </button>
-              <span className="text-gray-400">|</span>
-              <button
-                onClick={() => setOutreachType('sales')}
-                className={`transition-colors duration-200 ${
-                  outreachType === 'sales' ? 'text-black' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                Sales
-              </button>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button className="p-1 hover:bg-gray-200 rounded">
-                <Minus className="h-4 w-4 text-gray-500" />
-              </button>
-              <button className="p-1 hover:bg-gray-200 rounded">
-                <Square className="h-4 w-4 text-gray-500" />
-              </button>
-              <button className="p-1 hover:bg-gray-200 rounded">
-                <X className="h-4 w-4 text-gray-500" />
-              </button>
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+            <div className="flex items-center justify-between w-full">
+              {/* Left side: Recruiting | Sales */}
+              <div className="flex items-center space-x-1 text-sm font-medium text-gray-700" style={{ fontFamily: 'Satoshi, sans-serif' }}>
+                <button
+                  onClick={() => setOutreachType('recruiting')}
+                  className={`transition-colors duration-200 ${
+                    outreachType === 'recruiting' ? 'text-black font-semibold' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Recruiting
+                </button>
+                <span className="text-gray-400">|</span>
+                <button
+                  onClick={() => setOutreachType('sales')}
+                  className={`transition-colors duration-200 ${
+                    outreachType === 'sales' ? 'text-black font-semibold' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  Sales
+                </button>
+              </div>
+              
+              {/* Right side: Chips */}
+              <div className="flex gap-2">
+                {["Role", "Location", "Company Size", "Industry", "Experience Level", "Skills"].map((chip) => (
+                  <span
+                    key={chip}
+                    className="px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-white/40 backdrop-blur-sm text-xs opacity-50"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -221,9 +223,13 @@ const GmailInterface = memo(({
                 value={toField}
                 onChange={handleToFieldChange}
                 onKeyDown={handleToKeyDown}
-                placeholder="Enter job title, company, or keywords"
-                className="flex-1 px-2 py-1 text-gray-900 placeholder-gray-400
-                         border border-gray-200 bg-gray-50 rounded-sm sm:text-sm
+                placeholder={
+                  outreachType === 'sales'
+                    ? 'VP of BizDev at a CPG company in NYC'
+                    : 'VP of Engineering at an AI startup in SF'
+                }
+                className="flex-1 px-2 py-1 text-gray-900 placeholder-gray-400 placeholder-italic
+                         border border-gray-200 bg-gray-50 rounded-lg sm:text-sm
                          hover:border-gray-300 focus:outline-none focus:ring-2
                          focus:ring-gray-300 focus:border-gray-400 transition-colors"
                 disabled={isLoading}
@@ -263,9 +269,9 @@ const GmailInterface = memo(({
                 type="text"
                 value={subjectForUI}
                 onChange={handleSubjectFieldChange}
-                placeholder="Subject"
+
                 readOnly={typing}
-                className={`flex-1 py-1 text-gray-900 placeholder-gray-400 border-none outline-none text-sm ${typing ? 'opacity-70' : ''}`}
+                className={`flex-1 py-1 text-gray-900 placeholder-gray-400 placeholder-italic border-none outline-none text-sm ${typing ? 'opacity-70' : ''}`}
                 style={{ fontFamily: 'Satoshi, sans-serif' }}
               />
             </div>
@@ -281,24 +287,24 @@ const GmailInterface = memo(({
               </div>
             </div>
           </div>
-          </div>
-          <div className="px-4 pb-4">
+          
+          {/* Single footer with search button */}
+          <div className="px-4 pb-4 pt-4 border-t border-gray-200">
             {toField.trim() && !isLoading && (
-              <div className="text-xs text-gray-500 mt-1 pl-14 select-none mb-2">
+              <div className="text-xs text-gray-500 mb-2 text-center">
                 Press <span className="font-medium text-gray-700">Enter</span> or click 
                 <CornerDownLeft className="inline-block h-3.5 w-3.5 mx-1 align-text-bottom" />
                 to continue
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <div className="flex-1"></div>
+            <div className="flex items-center justify-end">
               <button
                 onClick={onEnterStart}
                 disabled={!toField.trim() || isLoading}
-                className={`px-6 py-2 rounded-md font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
+                className={`px-6 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
                   toField.trim() && !isLoading
-                    ? 'bg-gray-800 text-white hover:bg-gray-900 shadow-sm'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ? 'bg-gray-50 text-gray-900 border border-gray-200 hover:bg-gray-100 shadow-sm'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
                 }`}
                 style={{ fontFamily: 'Satoshi, sans-serif' }}
               >
@@ -314,44 +320,11 @@ const GmailInterface = memo(({
                   </>
                 )}
               </button>
-              
-              <div className="flex items-center space-x-2 text-gray-400">
-                <button className="p-2 hover:bg-gray-100 rounded">
-                  <Mail className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Single footer with search button */}
-            <div className="px-4 pb-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center justify-end">
-                <button
-                  onClick={onEnterStart}
-                  disabled={!toField.trim() || isLoading}
-                  className={`px-6 py-2 rounded-md font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${
-                    toField.trim() && !isLoading
-                      ? 'bg-gray-800 text-white hover:bg-gray-900 shadow-sm'
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  }`}
-                  style={{ fontFamily: 'Satoshi, sans-serif' }}
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Searching prospects...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      <span>Search</span>
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
   );
 });
 
@@ -451,8 +424,8 @@ Thanks,
     if (!toField.trim() || isLoading || typing) return; // Added typing guard
     setActiveTab('compose');
     setIsTypingComplete(false);
-    startTypingFromTemplate();
-    handleGmailSend();
+    await startTypingFromTemplate(); // Wait for typing to complete
+    await handleGmailSend(); // Then send the email
   };
 
   // Suppress unused variable warnings for now
@@ -538,22 +511,22 @@ Thanks,
       const campaign = await response.json();
       console.log('Campaign status:', campaign.status, campaign);
       
-      if (campaign.status === 'completed') {
-        // Campaign finished successfully
-        console.log('Campaign completed! Processing prospects...');
+      if (campaign.status === 'completed' || campaign.status === 'partial') {
+        // Use results or fall back to candidates or empty array
+        const sourceData = campaign.results || campaign.candidates || campaign.prospects || [];
         
-        // Convert campaign candidates to frontend prospects
-        const prospects = campaign.candidates || campaign.prospects || [];
-        const convertedProspects = prospects.map((candidate: any) => ({
-          name: candidate.full_name || candidate.first_name || 'Unknown Name',
-          title: candidate.current_title || candidate.job_title || 'Unknown Title',
-          company: candidate.current_company || candidate.job_company_name || 'Unknown Company',
-          email: candidate.email || candidate.work_email,
-          location: candidate.location || candidate.location_name
+        // Map candidates to prospects
+        const convertedProspects = sourceData.map((candidate: BackendCandidate) => ({
+          name: candidate.full_name || `${candidate.first_name || ''}`.trim() || 'Unknown',
+          title: candidate.job_title || '',
+          company: candidate.job_company_name || '',
+          email: candidate.work_email,
+          location: candidate.location_name
         }));
-
+        
         console.log('Converted prospects:', convertedProspects);
         setProspects(convertedProspects);
+        setActiveTab('prospects');
         setIsLoading(false);
         
         // Log that prospects are ready and user can switch tabs
@@ -695,30 +668,23 @@ Thanks,
   ];
 
   return (
-    <div className="min-h-screen bg-[#fdfcfa]" style={{
-      backgroundImage: `
-        radial-gradient(circle at 1px 1px, rgba(0,0,0,0.03) 1px, transparent 0),
-        radial-gradient(circle at 2px 3px, rgba(0,0,0,0.02) 1px, transparent 0),
-        radial-gradient(circle at 3px 1px, rgba(0,0,0,0.025) 1px, transparent 0)
-      `,
-      backgroundSize: '20px 20px, 15px 15px, 25px 25px'
-    }}>
+    <div className="min-h-screen">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 sticky top-0 z-50">
-        <div className="max-width-full px-8 py-3">
+      <header className="sticky top-0 z-50 bg-white/10 backdrop-blur-md border-b border-white/20">
+        <div className="max-w-full px-8 py-3">
           <div className="flex justify-between items-center">
             <h1 
-              className="text-lg font-bold text-black tracking-tight flex items-baseline"
+              className="text-lg font-bold text-white tracking-tight flex items-baseline"
               style={{ fontFamily: 'Satoshi, sans-serif', letterSpacing: '-0.5px' }}
             >
               sement.
-              <span className="inline-block w-px mx-4 bg-gray-400 h-3 opacity-50"></span>
-              <span className="font-normal text-base opacity-90">reach</span>
+              <span className="inline-block w-px mx-4 bg-white/40 h-3"></span>
+              <span className="font-normal text-base text-white/90">reach</span>
             </h1>
-            <nav className="flex items-center space-x-8">
-              <a href="#" className="text-sm font-medium text-gray-700 hover:text-black transition-colors" style={{ fontFamily: 'Satoshi, sans-serif' }}>Pricing</a>
-              <a href="#" className="text-sm font-medium text-gray-700 hover:text-black transition-colors" style={{ fontFamily: 'Satoshi, sans-serif' }}>Support</a>
-              <a href="#" className="text-sm font-medium text-gray-700 border border-gray-300 px-4 py-2 rounded-md hover:bg-gray-50 transition-colors" style={{ fontFamily: 'Satoshi, sans-serif' }}>Log In</a>
+            <nav className="flex items-center space-x-6">
+              <a href="#" className="text-sm font-medium text-white/90 hover:text-white transition-colors" style={{ fontFamily: 'Satoshi, sans-serif' }}>Pricing</a>
+              <a href="#" className="text-sm font-medium text-white/90 hover:text-white transition-colors" style={{ fontFamily: 'Satoshi, sans-serif' }}>Support</a>
+              <a href="#" className="text-sm font-medium text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition-colors border border-white/20" style={{ fontFamily: 'Satoshi, sans-serif' }}>Log In</a>
             </nav>
           </div>
         </div>
@@ -740,33 +706,33 @@ Thanks,
       <main className="max-w-5xl mx-auto px-8 pb-8">
         {/* Toggle Navigation */}
         <div className="flex justify-center mb-6">
-          <div className="bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200/60 p-1 shadow-sm">
-            <nav className="flex">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-200 ${
-                      activeTab === tab.id
-                        ? 'bg-gray-800 text-white shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                    }`}
-                    style={{ fontFamily: 'Satoshi, sans-serif' }}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{tab.name}</span>
-                    {tab.count !== undefined && tab.count > 0 && (
-                      <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">
-                        {tab.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+          <nav className="flex gap-2 p-1 rounded-full bg-white/10 backdrop-blur-md ring-1 ring-white/20">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={[
+                    "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all",
+                    active
+                      ? "bg-white/25 text-white ring-1 ring-white/40 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]"
+                      : "text-white/90 hover:bg-white/10 hover:ring-1 hover:ring-white/25"
+                  ].join(" ")}
+                  style={{ fontFamily: 'Satoshi, sans-serif' }}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{tab.name}</span>
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-xs bg-white/20">
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </div>
         
         {/* Main Content Area */}
@@ -785,7 +751,6 @@ Thanks,
               typing={typing}
               typedSubject={typedSubject}
               typedBody={typedBody}
-              handleGmailSend={handleGmailSend}
               onEnterStart={startSearch}
               placeholderValues={placeholderValues}
               setPlaceholderValues={setPlaceholderValues}
