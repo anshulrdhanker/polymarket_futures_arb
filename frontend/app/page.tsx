@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, memo } from 'react';
 import { Mail, Send, X, Minus, Square, Users, CornerDownLeft } from 'lucide-react';
+import { useChipExtractor, type ChipStates } from '@/hooks/useChipExtractor';
 
 // Props interface for GmailInterface
 interface GmailInterfaceProps {
@@ -20,6 +21,22 @@ interface GmailInterfaceProps {
   onEnterStart: () => void;
   placeholderValues: Record<string, string>;
   setPlaceholderValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  hasTyped: boolean;
+  setHasTyped: (value: boolean) => void;
+  typedPlaceholder: string;
+  setTypedPlaceholder: (value: string) => void;
+  hasTypedRecruitingPlaceholder: boolean;
+  setHasTypedRecruitingPlaceholder: (value: boolean) => void;
+  hasTypedSalesPlaceholder: boolean;
+  setHasTypedSalesPlaceholder: (value: boolean) => void;
+  chipStates: {
+    role: boolean;
+    location: boolean;
+    companySize: boolean;
+    industry: boolean;
+    experienceLevel: boolean;
+    skills: boolean;
+  };
 }
 
 // --- Placeholder chips (inline) ----------------------------------------
@@ -143,11 +160,63 @@ const GmailInterface = memo(({
   onEnterStart,
   placeholderValues,
   setPlaceholderValues,
+  hasTyped,
+  setHasTyped,
+  typedPlaceholder,
+  setTypedPlaceholder,
+  hasTypedRecruitingPlaceholder,
+  setHasTypedRecruitingPlaceholder,
+  hasTypedSalesPlaceholder,
+  setHasTypedSalesPlaceholder,
+  chipStates,
 }: GmailInterfaceProps) => {
   const toInputRef = React.useRef<HTMLInputElement>(null);
+  const [isTyping, setIsTyping] = React.useState(false);
   const setPlaceholderValue = React.useCallback((key: string, value: string) => {
     setPlaceholderValues(prev => ({ ...prev, [key]: value }));
   }, [setPlaceholderValues]);
+
+  // Typing helper for the placeholder animation
+  const typeInto = React.useCallback((text: string, setFn: (s: string) => void, speed = 40) =>
+    new Promise<void>((resolve) => {
+      setIsTyping(true);
+      setFn('');
+      let i = 0;
+      const id = setInterval(() => {
+        if (i < text.length) {
+          setFn(text.substring(0, i + 1));
+          i++;
+        } else {
+          clearInterval(id);
+          setIsTyping(false);
+          resolve();
+        }
+      }, speed);
+    }), []);
+
+  // Handle placeholder typing animation when outreachType changes
+  React.useEffect(() => {
+    if (!outreachType) return;
+
+    const runTyping = async (text: string, setter: (v: boolean) => void) => {
+      setTypedPlaceholder(''); // Clear the placeholder before typing
+      await typeInto(text, setTypedPlaceholder, 40);
+      setter(true);
+    };
+
+    if (outreachType === 'recruiting' && !hasTypedRecruitingPlaceholder) {
+      runTyping("VP of Engineering at an AI startup in SF", setHasTypedRecruitingPlaceholder);
+    } else if (outreachType === 'sales' && !hasTypedSalesPlaceholder) {
+      runTyping("VP of BizDev at a CPG company in NYC", setHasTypedSalesPlaceholder);
+    } else {
+      // Already typed before → instantly set
+      setTypedPlaceholder(
+        outreachType === 'recruiting'
+          ? "VP of Engineering at an AI startup in SF"
+          : "VP of BizDev at a CPG company in NYC"
+      );
+    }
+  }, [outreachType, typeInto, hasTypedRecruitingPlaceholder, hasTypedSalesPlaceholder, setHasTypedRecruitingPlaceholder, setHasTypedSalesPlaceholder, setTypedPlaceholder]);
 
   // Compute display values based on typing state
   const subjectForUI = typing ? (typedSubject ?? subjectField) : subjectField;
@@ -155,8 +224,14 @@ const GmailInterface = memo(({
 
   // Memoized handlers for input fields
   const handleToFieldChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setToField(e.target.value);
-  }, [setToField]);
+    const value = e.target.value;
+    setToField(value);
+    if (value.trim() === "") {
+      setHasTyped(false);
+    } else if (!hasTyped) {
+      setHasTyped(true);
+    }
+  }, [setToField, hasTyped, setHasTyped]);
 
   const handleToKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -201,44 +276,54 @@ const GmailInterface = memo(({
               
               {/* Right side: Chips */}
               <div className="flex gap-2">
-                {["Role", "Location", "Company Size", "Industry", "Experience Level", "Skills"].map((chip) => (
-                  <span
-                    key={chip}
-                    className="px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-white/40 backdrop-blur-sm text-xs opacity-50"
-                  >
-                    {chip}
-                  </span>
-                ))}
+                {CHIP_LABELS.map(({ key, label }) => {
+                  const on = chipStates[key as keyof typeof chipStates];
+                  return (
+                    <span
+                      key={key}
+                      className={`px-2 py-0.5 rounded-full border text-xs transition-all duration-300
+                        ${on
+                          ? 'opacity-100 bg-white/60 backdrop-blur-sm text-gray-800 ring-2 ring-blue-300/40 border-transparent'
+                          : 'opacity-50 bg-white/40 text-gray-500 border-gray-200'
+                        }`}
+                    >
+                      {label}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>
 
           <div className="flex flex-col flex-1 p-4 space-y-2">
-            <div className="flex items-center border-b border-gray-200 py-2 rounded-md">
-              <label htmlFor="to-input" className="w-12 text-sm text-gray-500">To:</label>
-              <input
-                id="to-input"
-                ref={toInputRef}
-                type="text"
-                value={toField}
-                onChange={handleToFieldChange}
-                onKeyDown={handleToKeyDown}
-                placeholder={
-                  outreachType === 'sales'
-                    ? 'VP of BizDev at a CPG company in NYC'
-                    : 'VP of Engineering at an AI startup in SF'
-                }
-                className="flex-1 px-2 py-1 text-gray-900 placeholder-gray-400 placeholder-italic
-                         border border-gray-200 bg-gray-50 rounded-lg sm:text-sm
-                         hover:border-gray-300 focus:outline-none focus:ring-2
-                         focus:ring-gray-300 focus:border-gray-400 transition-colors"
-                disabled={isLoading}
-                aria-describedby="to-input-hint"
-              />
-              <div id="to-input-hint" className="sr-only">
-                Type a job title, company, or keywords to search for prospects
-              </div>
-              <div className="flex items-center space-x-3 text-sm text-gray-500 ml-2">
+            {/* TO ROW (no Cc/Bcc, button flush right) */}
+            <div className="flex items-center border-b border-gray-200 py-2">
+              <label htmlFor="to-input" className="mr-2 text-sm text-gray-500 flex-shrink-0">To:</label>
+              
+              <div className="flex-1 flex items-center">
+                <input
+                  type="text"
+                  id="to-input"
+                  value={toField}
+                  onChange={(e) => {
+                    setToField(e.target.value);
+                    setHasTyped(e.target.value.length > 0);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      onEnterStart();
+                    }
+                  }}
+                  placeholder={typedPlaceholder}
+                  className={`w-full px-2 py-1 text-gray-900 placeholder-gray-400 placeholder-italic
+                           border border-gray-200 bg-gray-50 rounded-lg sm:text-sm
+                           hover:border-gray-300 focus:outline-none focus:ring-2
+                           focus:ring-gray-300 focus:border-gray-400 transition-colors
+                           ${!toField ? 'opacity-70' : ''}`}
+                  disabled={isLoading}
+                  ref={toInputRef}
+                />
+
                 <button
                   type="button"
                   onClick={() => {
@@ -247,7 +332,7 @@ const GmailInterface = memo(({
                   }}
                   disabled={!toField.trim() || isLoading}
                   title={toField.trim() ? 'Press Enter or click to continue' : "Type who you're looking for"}
-                  className={`p-1.5 rounded-md border transition-all ${
+                  className={`ml-2 p-1.5 rounded-md border transition-all ${
                     toField.trim() && !isLoading
                       ? 'border-gray-300 hover:bg-gray-100'
                       : 'border-gray-200 opacity-50 cursor-not-allowed'
@@ -256,14 +341,13 @@ const GmailInterface = memo(({
                 >
                   <CornerDownLeft className="h-4 w-4" />
                 </button>
-                <span>Cc</span>
-                <span>Bcc</span>
               </div>
             </div>
 
+            {/* Subject Row */}
             <div className="flex items-center border-b border-gray-200 py-2">
-              <label className="text-sm text-gray-600 w-14 mr-2" style={{ fontFamily: 'Satoshi, sans-serif' }}>
-                Subject
+              <label className="text-sm text-gray-600 w-14 mr-2 flex-shrink-0" style={{ fontFamily: 'Satoshi, sans-serif' }}>
+                Subject:
               </label>
               <input
                 type="text"
@@ -290,13 +374,20 @@ const GmailInterface = memo(({
           
           {/* Single footer with search button */}
           <div className="px-4 pb-4 pt-4 border-t border-gray-200">
-            {toField.trim() && !isLoading && (
+            {!hasTyped && !isLoading && (
+              <div className="text-xs text-gray-500 mb-2 text-center">
+                Search for who you're looking for in the <span className="font-bold">To</span> box
+              </div>
+            )}
+
+            {hasTyped && toField.trim() && !isLoading && (
               <div className="text-xs text-gray-500 mb-2 text-center">
                 Press <span className="font-medium text-gray-700">Enter</span> or click 
                 <CornerDownLeft className="inline-block h-3.5 w-3.5 mx-1 align-text-bottom" />
                 to continue
               </div>
             )}
+
             <div className="flex items-center justify-end">
               <button
                 onClick={onEnterStart}
@@ -327,6 +418,15 @@ const GmailInterface = memo(({
     </div>
   );
 });
+
+const CHIP_LABELS = [
+  { key: 'role', label: 'Role' },
+  { key: 'location', label: 'Location' },
+  { key: 'companySize', label: 'Company Size' },
+  { key: 'industry', label: 'Industry' },
+  { key: 'experienceLevel', label: 'Experience Level' },
+  { key: 'skills', label: 'Skills' },
+] as const;
 
 // Add display name for better debugging
 GmailInterface.displayName = 'GmailInterface';
@@ -365,9 +465,26 @@ export default function MainPage() {
   const [toField, setToField] = useState('');
   const [subjectField, setSubjectField] = useState('');
   const [bodyField, setBodyField] = useState('');
-  const [outreachType, setOutreachType] = useState<'recruiting' | 'sales' | null>('recruiting');
+  const [outreachType, setOutreachType] = useState<'recruiting' | 'sales'>('recruiting');
+  const [hasTyped, setHasTyped] = useState(false);
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
+  const [typedPlaceholder, setTypedPlaceholder] = useState('VP of Engineering at an AI startup in SF');
+  const [hasTypedRecruitingPlaceholder, setHasTypedRecruitingPlaceholder] = useState(false);
+  const [hasTypedSalesPlaceholder, setHasTypedSalesPlaceholder] = useState(false);
+  
+  // Chip state for search criteria
+  const [chipStates, setChipStates] = useState<ChipStates>({
+    role: false,
+    location: false,
+    companySize: false,
+    industry: false,
+    experienceLevel: false,
+    skills: false,
+  });
+  
+  // Analyze input for chip states
+  useChipExtractor(toField, setChipStates);
 
   // --- Typing UX state ---
   const [typing, setTyping] = useState(false);
@@ -734,8 +851,6 @@ Thanks,
             })}
           </nav>
         </div>
-        
-        {/* Main Content Area */}
         <div className="mt-6">
           {activeTab === 'compose' && (
             <GmailInterface
@@ -749,11 +864,20 @@ Thanks,
               setOutreachType={setOutreachType}
               isLoading={isLoading}
               typing={typing}
-              typedSubject={typedSubject}
-              typedBody={typedBody}
+              typedSubject={typing ? typedSubject : undefined}
+              typedBody={typing ? typedBody : undefined}
               onEnterStart={startSearch}
               placeholderValues={placeholderValues}
               setPlaceholderValues={setPlaceholderValues}
+              hasTyped={hasTyped}
+              setHasTyped={setHasTyped}
+              typedPlaceholder={typedPlaceholder}
+              setTypedPlaceholder={setTypedPlaceholder}
+              hasTypedRecruitingPlaceholder={hasTypedRecruitingPlaceholder}
+              setHasTypedRecruitingPlaceholder={setHasTypedRecruitingPlaceholder}
+              hasTypedSalesPlaceholder={hasTypedSalesPlaceholder}
+              setHasTypedSalesPlaceholder={setHasTypedSalesPlaceholder}
+              chipStates={chipStates}
             />
           )}
           

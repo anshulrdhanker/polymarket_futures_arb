@@ -35,6 +35,7 @@ interface SearchRequest {
 
 // POST /api/search/prospects
 router.post('/prospects', searchLimiter, /* authenticateUser, */ asyncHandler<{}, any, SearchRequest>(async (req, res) => {
+  console.log('CHK A: entering /api/search/prospects');
   console.log('🔥 [API] Search request received:', req.body);
   
   try {
@@ -75,10 +76,12 @@ router.post('/prospects', searchLimiter, /* authenticateUser, */ asyncHandler<{}
     });
 
     // Parse natural language input to structured data
+    console.log('CHK B: before OpenAI parse', { toField, outreachType });
     const conversationData = await OpenAIService.parseNaturalLanguageToConversationData(
       toField,
       outreachType
     );
+    console.log('CHK C: after OpenAI parse', conversationData);
 
     // Use mock user defaults for testing
     const userDefaults = {
@@ -89,6 +92,7 @@ router.post('/prospects', searchLimiter, /* authenticateUser, */ asyncHandler<{}
     };
 
     // Create a new campaign for this search
+    console.log('CHK D: before Campaign.create');
     const campaign = await Campaign.create({
       // Required fields
       user_id: mockUser.id, // Use mock user
@@ -114,6 +118,7 @@ router.post('/prospects', searchLimiter, /* authenticateUser, */ asyncHandler<{}
         confidence_score: 1.0 // Assuming high confidence for now
       }
     });
+    console.log('CHK E: after Campaign.create', { id: campaign?.id });
 
     if (!campaign) {
       return res.status(500).json({
@@ -124,9 +129,11 @@ router.post('/prospects', searchLimiter, /* authenticateUser, */ asyncHandler<{}
     }
 
     try {
+      console.log('CHK F: before QueueService.startCampaignProcessing');
       console.log('🔥 [API] Campaign created, queuing job...');
       // Start campaign processing using correct method name
       await QueueService.startCampaignProcessing(campaign.id, mockUser.id, conversationData);
+      console.log('CHK G: after QueueService.startCampaignProcessing');
 
       // Return immediate response with campaign ID for polling
       const campaignData = {

@@ -600,30 +600,63 @@ export class PDLService {
       titlecase: true
     };
 
-    console.log('Sending PDL API request with body:', JSON.stringify(requestBody, null, 2));
-
-    const response = await fetch(`${PDL_API_BASE_URL}/person/search`, {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': PDL_API_KEY,
-        'Content-Type': 'application/json',
-        Accept: 'application/json'
+    const url = `${PDL_API_BASE_URL}/person/search`;
+    console.log(`[PDL] Sending request to ${url}`, { 
+      querySummary: { 
+        size: requestBody.size,
+        hasQuery: !!query.query,
+        hasFilter: !!query.query?.bool?.filter
       },
-      body: JSON.stringify(requestBody)
+      timestamp: new Date().toISOString()
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`PDL API request failed: ${response.status} - ${errorText}`);
-    }
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Api-Key': PDL_API_KEY,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
 
-    const data_response: PDLResponse = await response.json();
-    if (!data_response || data_response.status !== 200) {
-      throw new Error(`PDL API error: ${JSON.stringify(data_response)}`);
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[PDL] API request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          url,
+          error: errorText,
+          timestamp: new Date().toISOString()
+        });
+        throw new Error(`PDL API request failed: ${response.status} - ${response.statusText}`);
+      }
 
-    console.log(`PDL API call successful in ${Date.now() - startTime}ms, ${data_response.total} results`);
-    return data_response;
+      const data_response: PDLResponse = await response.json();
+      if (!data_response || data_response.status !== 200) {
+        console.error('[PDL] API response error:', {
+          response: data_response,
+          url,
+          timestamp: new Date().toISOString()
+        });
+        throw new Error(`PDL API error: ${JSON.stringify(data_response)}`);
+      }
+
+      console.log(`[PDL] API call successful in ${Date.now() - startTime}ms, ${data_response.total} results`);
+      return data_response;
+    } catch (error: any) {
+      console.error('[PDL] Fatal error in executeSearch:', {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+        cause: error?.cause,
+        code: error?.code,
+        url,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
   }
 
   /** Parse and score results */
